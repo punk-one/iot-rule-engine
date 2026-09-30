@@ -1,0 +1,319 @@
+{
+  "id": "gateway-device-status-test-fixture",
+  "name": "Gateway device status test fixture",
+  "version": 1,
+  "enabled": false,
+  "debug_mode": true,
+  "description": "Synthetic fixture used by deployment validation tests.",
+  "lifecycle_status": "active",
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z",
+  "metadata": {
+    "node_positions": {
+      "detect_online_change": {
+        "x": 300,
+        "y": 140
+      },
+      "processor_1776325821577": {
+        "x": 546.3039215686275,
+        "y": 140.53921568627447
+      },
+      "map_state_event_row": {
+        "x": 720,
+        "y": 210
+      },
+      "sink_state_event_redis": {
+        "x": 900,
+        "y": 70
+      },
+      "sink_state_events_ts": {
+        "x": 1080,
+        "y": 210
+      },
+      "sink_status_shadow": {
+        "x": 300,
+        "y": 0
+      },
+      "src_status_mqtt": {
+        "x": 0,
+        "y": 70
+      }
+    },
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    }
+  },
+  "source": null,
+  "nodes": [
+    {
+      "id": "src_status_mqtt",
+      "type": "source",
+      "name": "source-mqtt gateway status",
+      "plugin": "source-mqtt",
+      "config": {
+        "connector_ref": "mqtt-test",
+        "polling": {
+          "max_backoff_ms": 10000,
+          "wait_timeout_ms": 1000
+        },
+        "process": {
+          "decode": {
+            "format": "json"
+          },
+          "subscribe": {
+            "qos": 0,
+            "topics": [
+              "v1/gateway/+/status/report"
+            ]
+          }
+        },
+        "usage_weight": 1
+      },
+      "metadata": {
+        "position": {
+          "x": 0,
+          "y": 70
+        }
+      },
+      "wires": [
+        "sink_status_shadow",
+        "detect_online_change"
+      ]
+    },
+    {
+      "id": "sink_status_shadow",
+      "type": "sink",
+      "name": "sink-redis device status",
+      "plugin": "sink-redis",
+      "config": {
+        "connector_ref": "redis-test",
+        "encode": {
+          "field_mappings": [
+            {
+              "field": "online",
+              "path": "payload.data.online"
+            },
+            {
+              "field": "last_seen_at",
+              "path": "payload.data.last_seen_at"
+            },
+            {
+              "field": "connection_state",
+              "path": "payload.data.connection_state"
+            },
+            {
+              "field": "error",
+              "path": "payload.data.error"
+            },
+            {
+              "field": "time",
+              "path": "payload.time"
+            }
+          ],
+          "include_context": false,
+          "include_metadata": false
+        },
+        "options": {
+          "approx": true,
+          "write_timeout_sec": 10
+        },
+        "target": {
+          "key_field": "payload.device_code",
+          "key_prefix": "iot:device:status:",
+          "mode": "hash"
+        }
+      },
+      "metadata": {
+        "position": {
+          "x": 300,
+          "y": 0
+        }
+      },
+      "wires": []
+    },
+    {
+      "id": "detect_online_change",
+      "type": "processor",
+      "name": "detect-change online",
+      "plugin": "detect-change",
+      "config": {
+        "output": {
+          "emit": "on_change"
+        },
+        "process": {
+          "detect": {
+            "direction": "any",
+            "field": "data.online",
+            "fields": [
+              null
+            ],
+            "type": "changed",
+            "value": 1
+          }
+        },
+        "state": {
+          "evict": "lru",
+          "key_by": [
+            "device_code"
+          ],
+          "ttl": "24h"
+        }
+      },
+      "metadata": {
+        "position": {
+          "x": 300,
+          "y": 140
+        }
+      },
+      "wires": [
+        "processor_1776325821577"
+      ]
+    },
+    {
+      "id": "sink_state_event_redis",
+      "type": "sink",
+      "name": "sink-redis state events projection",
+      "plugin": "sink-redis",
+      "config": {
+        "connector_ref": "redis-test",
+        "encode": {
+          "field_mappings": [
+            {
+              "field": "device_code",
+              "path": "payload.fields.device_code"
+            },
+            {
+              "field": "active_events",
+              "path": "payload.fields.active_events"
+            },
+            {
+              "field": "alarms",
+              "path": "payload.fields.alarms"
+            },
+            {
+              "field": "faults",
+              "path": "payload.fields.faults"
+            },
+            {
+              "field": "last_event_at",
+              "path": "payload.fields.last_event_at"
+            },
+            {
+              "field": "last_status_change_at",
+              "path": "payload.fields.last_status_change_at"
+            },
+            {
+              "field": "updated_at",
+              "path": "payload.fields.updated_at"
+            }
+          ],
+          "include_context": false,
+          "include_metadata": false
+        },
+        "options": {
+          "approx": true,
+          "write_timeout_sec": 10
+        },
+        "target": {
+          "key": "",
+          "key_field": "payload.key",
+          "mode": "hash"
+        }
+      },
+      "metadata": {
+        "position": {
+          "x": 900,
+          "y": 70
+        }
+      },
+      "wires": []
+    },
+    {
+      "id": "map_state_event_row",
+      "type": "processor",
+      "name": "transform-map state event row",
+      "plugin": "transform-map",
+      "config": {
+        "process": {
+          "template": {
+            "create_at": "{{ now }}",
+            "device_code": "{{ .payload.device_code }}",
+            "event_type": "status_event",
+            "payload": "{{ json .payload.data }}",
+            "source_system": "gateway",
+            "time": "{{ rfc3339 .event.timestamp }}",
+            "transport_protocol": "mqtt",
+            "update_at": "{{ now }}"
+          }
+        }
+      },
+      "metadata": {
+        "position": {
+          "x": 720,
+          "y": 210
+        }
+      },
+      "wires": [
+        "sink_state_events_ts"
+      ]
+    },
+    {
+      "id": "sink_state_events_ts",
+      "type": "sink",
+      "name": "sink-timeseries-timescaledb device events",
+      "plugin": "sink-timeseries-timescaledb",
+      "config": {
+        "connector_ref": "timescaledb-test",
+        "output": {
+          "auto_create_columns": false,
+          "batch": {
+            "flush_interval_ms": 200,
+            "max_bytes": 524288,
+            "max_rows": 200
+          },
+          "table": "ts_cmn_device_events",
+          "write_mode": "batch"
+        }
+      },
+      "metadata": {
+        "position": {
+          "x": 1080,
+          "y": 210
+        }
+      },
+      "wires": []
+    },
+    {
+      "id": "processor_1776325821577",
+      "type": "processor",
+      "name": "processor_1776325821577",
+      "plugin": "process-status-event",
+      "config": {
+        "output": {
+          "event_label": "events",
+          "redis_key_prefix": "iot:device:status:",
+          "redis_label": "redis"
+        },
+        "state": {
+          "connection_state_field": "payload.data.connection_state",
+          "device_code_field": "payload.device_code",
+          "online_field": "payload.data.online",
+          "time_field": "payload.time"
+        },
+        "state_key_prefix": "iot:device:event_state:"
+      },
+      "metadata": {
+        "position": {
+          "x": 546.3039215686275,
+          "y": 140.53921568627447
+        }
+      },
+      "wires": [
+        "sink_state_event_redis",
+        "map_state_event_row"
+      ]
+    }
+  ]
+}

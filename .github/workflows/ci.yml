@@ -50,6 +50,13 @@ jobs:
           ref: v1.0.0
           path: iot-rule-plugin-sdk
 
+      - name: Check out official plugins v1
+        uses: actions/checkout@v4
+        with:
+          repository: punk-one/iot-rule-plugins
+          ref: v1.0.0
+          path: iot-rule-plugins
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -57,6 +64,7 @@ jobs:
           cache-dependency-path: |
             iot-rule-engine/go.sum
             iot-rule-plugin-sdk/go.sum
+            iot-rule-plugins/**/go.sum
 
       - name: Create local workspace
         run: go work init ./iot-rule-engine ./iot-rule-plugin-sdk

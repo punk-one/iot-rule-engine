@@ -146,11 +146,11 @@ func TestValidationErrorsFromRuntimeErrorParsesExecutorEnvelope(t *testing.T) {
 	}
 }
 
-func TestGatewayDeviceStatusRuleDocPassesDeploymentValidation(t *testing.T) {
+func TestGatewayDeviceStatusRuleFixturePassesDeploymentValidation(t *testing.T) {
 	pluginsDir := repoPluginsDir(t)
 	manager := NewManager(nil, pluginsDir, "", nil)
 
-	rulePath := repoDocPath(t, "iot-gateway-device-status-events-20260408.json")
+	rulePath := handlerTestdataPath(t, "gateway-device-status-rule.json")
 	raw, err := os.ReadFile(rulePath)
 	if err != nil {
 		t.Fatalf("read rule file: %v", err)
@@ -167,8 +167,8 @@ func TestGatewayDeviceStatusRuleDocPassesDeploymentValidation(t *testing.T) {
 	}
 }
 
-func TestGatewayDeviceStatusRuleDocRoutesTimescaleWritesThroughTransformMap(t *testing.T) {
-	rule := loadRuleFlowFromDoc(t, "iot-gateway-device-status-events-20260408.json")
+func TestGatewayDeviceStatusRuleFixtureRoutesTimescaleWritesThroughTransformMap(t *testing.T) {
+	rule := loadRuleFlowFromTestdata(t, "gateway-device-status-rule.json")
 
 	nodes := make(map[string]*schema.NodeConfig, len(rule.Nodes))
 	for _, node := range rule.Nodes {
@@ -215,9 +215,9 @@ func TestGatewayDeviceStatusRuleDocRoutesTimescaleWritesThroughTransformMap(t *t
 	assertTemplateField(t, templateCfg, "time", "{{ rfc3339 .event.timestamp }}")
 }
 
-func loadRuleFlowFromDoc(t *testing.T, filename string) *schema.RuleFlow {
+func loadRuleFlowFromTestdata(t *testing.T, filename string) *schema.RuleFlow {
 	t.Helper()
-	rulePath := repoDocPath(t, filename)
+	rulePath := handlerTestdataPath(t, filename)
 	raw, err := os.ReadFile(rulePath)
 	if err != nil {
 		t.Fatalf("read rule file: %v", err)
@@ -284,13 +284,13 @@ func repoPluginsDir(t *testing.T) string {
 	return pluginsDir
 }
 
-func repoDocPath(t *testing.T, filename string) string {
+func handlerTestdataPath(t *testing.T, filename string) string {
 	t.Helper()
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Getwd failed: %v", err)
 	}
-	return filepath.Clean(filepath.Join(wd, "..", "..", "..", "..", "docs", filename))
+	return filepath.Join(wd, "testdata", filename)
 }
 
 type assertErr string
