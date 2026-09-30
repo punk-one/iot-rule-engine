@@ -1,0 +1,16 @@
+[Unit]
+Description=IoT Rule Engine
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/iot-rule-engine/backend
+ExecStart=/root/iot-rule-engine/backend/iot-rule-engine -config /root/iot-rule-engine/backend/configs/config.yaml
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

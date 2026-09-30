@@ -1,0 +1,137 @@
+.App {
+  text-align: left;
+}
+
+.custom-node {
+  font-family: 'Inter', sans-serif;
+  border-radius: 8px;
+  background: var(--color-surface);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.custom-node:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.custom-node.highlighted {
+  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 0 12px rgba(59, 130, 246, 0);
+  }
+}
+
+@keyframes pulse-error {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+  }
+}
+
+.custom-node.error {
+  animation: pulse-error 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  border-color: #ef4444;
+}
+
+.custom-node.selected {
+  border: 2px solid #3b82f6 !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* React Flow Style Overrides */
+.react-flow__node {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: #3b82f6;
+  border: 2px solid var(--color-surface-raised);
+  transition: all 0.2s ease;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.4);
+  background: #2563eb;
+}
+
+.react-flow__edge-path {
+  stroke-width: 2.5;
+  transition: stroke 0.3s ease;
+}
+
+.react-flow__edge {
+  cursor: pointer;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: #2E90FA !important;
+  stroke-width: 3px !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path,
+.react-flow__edge:focus-visible .react-flow__edge-path {
+  stroke: #2E90FA !important;
+  stroke-width: 3.5px !important;
+}
+
+.react-flow__edge.animated path {
+  stroke-dasharray: 5;
+  animation: dash 1s linear infinite;
+}
+
+@keyframes dash {
+  from {
+    stroke-dashoffset: 20;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.sidebar-item {
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.sidebar-item:hover {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  transform: translateX(4px);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-weight: 600;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
+  opacity: 0.9;
+}

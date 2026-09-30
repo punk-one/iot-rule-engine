@@ -1,0 +1,169 @@
+:root {
+  --color-primary: #168c6a;
+  --color-primary-hover: #116d54;
+  --color-bg: #e6e8eb;
+  --color-surface: #f4f5f6;
+  --color-surface-raised: #f8f9fa;
+  --color-surface-subtle: #eceef0;
+  --color-text: #252b30;
+  --color-text-secondary: #626a72;
+  --color-border: #cfd3d8;
+  --color-sidebar: #d9dde1;
+  --color-sidebar-subtle: #d1d6da;
+  --color-topbar: rgb(236 238 240 / .94);
+  --success-color: #1f9d74;
+  --error-color: #ef4444;
+  --warning-color: #d97706;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+  --shadow-card: 0 8px 24px rgb(31 41 55 / .07);
+  --shadow-floating: 0 16px 40px rgb(31 41 55 / .16);
+  --glass-bg: rgb(244 245 246 / .78);
+  --glass-border: rgb(255 255 255 / .32);
+
+  /* Backward-compatible aliases while remaining pages are migrated. */
+  --primary-color: var(--color-primary);
+  --primary-hover: var(--color-primary-hover);
+  --bg-color: var(--color-bg);
+  --card-bg: var(--color-surface);
+  --text-main: var(--color-text);
+  --text-muted: var(--color-text-secondary);
+  --border-color: var(--color-border);
+  --shadow-sm: var(--shadow-card);
+  --shadow-md: var(--shadow-floating);
+  --shadow-lg: var(--shadow-floating);
+}
+
+:root[data-theme='dark'] {
+  --color-primary: #45b991;
+  --color-primary-hover: #62c9a5;
+  --color-bg: #11161b;
+  --color-surface: #1a2128;
+  --color-surface-raised: #222a32;
+  --color-surface-subtle: #202830;
+  --color-text: #e9efed;
+  --color-text-secondary: #a8b4b0;
+  --color-border: #35424c;
+  --color-sidebar: #141a20;
+  --color-sidebar-subtle: #10161b;
+  --color-topbar: rgb(24 31 37 / .94);
+  --shadow-card: 0 8px 24px rgb(0 0 0 / .22);
+  --shadow-floating: 0 16px 40px rgb(0 0 0 / .38);
+  --glass-bg: rgb(26 33 40 / .82);
+  --glass-border: rgb(255 255 255 / .08);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC',
+    'Noto Sans CJK SC', 'Roboto', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  transition: background-color .2s ease, color .2s ease;
+}
+
+button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+button:not(:disabled):active {
+  transform: translateY(0);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid rgb(22 140 106 / 0.28);
+  outline-offset: 2px;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-text-secondary) 45%, transparent);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  button:not(:disabled):hover {
+    transform: none;
+  }
+}

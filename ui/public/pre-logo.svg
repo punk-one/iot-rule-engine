@@ -1,0 +1,78 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="preOuter" x1="120" y1="84" x2="402" y2="426" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7BE0EE"/>
+      <stop offset="0.48" stop-color="#2E8DB7"/>
+      <stop offset="1" stop-color="#113D66"/>
+    </linearGradient>
+    <linearGradient id="preInner" x1="166" y1="120" x2="360" y2="392" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6FD3E0"/>
+      <stop offset="0.52" stop-color="#205F88"/>
+      <stop offset="1" stop-color="#143D5E"/>
+    </linearGradient>
+    <linearGradient id="preGlow" x1="190" y1="170" x2="356" y2="338" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#95F5FF"/>
+      <stop offset="1" stop-color="#55C7F6"/>
+    </linearGradient>
+  </defs>
+
+  <path
+    d="M256 70L410 160V340L256 430L102 340V160L256 70Z"
+    fill="url(#preOuter)"
+    stroke="#1C5A8D"
+    stroke-width="10"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M256 103L382 176V324L256 397L130 324V176L256 103Z"
+    fill="url(#preInner)"
+    stroke="#0E4D76"
+    stroke-width="5"
+    stroke-linejoin="round"
+  />
+
+  <path d="M256 103L382 176L256 208L130 176L256 103Z" fill="#8CEAF3" fill-opacity="0.16"/>
+  <path d="M382 176V324L316 286L256 208L382 176Z" fill="#78E2EE" fill-opacity="0.11"/>
+  <path d="M130 176L256 208L194 285L130 324V176Z" fill="#0A294A" fill-opacity="0.18"/>
+  <path d="M194 285L256 208L316 286L256 397L194 285Z" fill="#103754" fill-opacity="0.22"/>
+
+  <path
+    d="M174 160H250C281 160 301 178 301 209V224C301 256 280 276 246 276H214V351H174V160ZM214 196V241H241C252 241 260 235 260 222V214C260 202 253 196 240 196H214Z"
+    stroke="url(#preGlow)"
+    stroke-width="6"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M174 160H250C281 160 301 178 301 209V224C301 256 280 276 246 276H214V351H174V160ZM214 196V241H241C252 241 260 235 260 222V214C260 202 253 196 240 196H214Z"
+    stroke="#BDF7FF"
+    stroke-opacity="0.3"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+
+  <path
+    d="M226 282H266L314 351H271L235 299H214V351H174V160H214V282H226Z"
+    fill="#164263"
+    fill-opacity="0.22"
+  />
+  <path
+    d="M226 282H266L314 351H271L235 299H214V351H174V160H214V282H226Z"
+    stroke="url(#preGlow)"
+    stroke-width="6"
+    stroke-linejoin="round"
+  />
+
+  <path
+    d="M279 176H381V209H320V240H366V272H320V319H381V351H279V176Z"
+    stroke="url(#preGlow)"
+    stroke-width="6"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M279 176H381V209H320V240H366V272H320V319H381V351H279V176Z"
+    stroke="#BDF7FF"
+    stroke-opacity="0.26"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+</svg>

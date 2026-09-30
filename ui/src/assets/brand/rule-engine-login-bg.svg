@@ -1,0 +1,42 @@
+<svg width="1600" height="1080" viewBox="0 0 1600 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="1080" fill="#F4FBF7"/>
+  <g opacity="0.9">
+    <path d="M101 238C226 166 340 141 442 163C563 189 597 302 706 342C848 394 948 250 1087 241C1227 232 1366 372 1500 372" stroke="#54B67D" stroke-width="4" stroke-linecap="round" stroke-dasharray="10 16"/>
+    <path d="M120 713C281 612 426 592 556 639C673 682 743 817 883 814C1028 811 1131 628 1287 601C1370 586 1444 613 1506 666" stroke="#2A8C74" stroke-width="4" stroke-linecap="round" stroke-dasharray="14 18"/>
+    <path d="M271 439C391 372 539 384 634 462C708 523 750 639 862 647C978 655 1047 505 1160 481C1286 454 1388 551 1480 641" stroke="#86D0A5" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+  <g filter="url(#glow)">
+    <circle cx="219" cy="240" r="18" fill="#2F855A"/>
+    <circle cx="447" cy="164" r="14" fill="#54B67D"/>
+    <circle cx="702" cy="341" r="18" fill="#168C6A"/>
+    <circle cx="1087" cy="241" r="16" fill="#54B67D"/>
+    <circle cx="1501" cy="372" r="14" fill="#2F855A"/>
+    <circle cx="271" cy="438" r="16" fill="#7ED9A2"/>
+    <circle cx="631" cy="462" r="18" fill="#2A8C74"/>
+    <circle cx="1161" cy="481" r="16" fill="#168C6A"/>
+    <circle cx="1480" cy="641" r="15" fill="#54B67D"/>
+    <circle cx="121" cy="713" r="17" fill="#2F855A"/>
+    <circle cx="557" cy="639" r="18" fill="#54B67D"/>
+    <circle cx="883" cy="814" r="16" fill="#168C6A"/>
+    <circle cx="1506" cy="666" r="14" fill="#2A8C74"/>
+  </g>
+  <g opacity="0.55">
+    <rect x="888" y="108" width="266" height="140" rx="24" fill="#FFFFFF"/>
+    <rect x="918" y="146" width="106" height="12" rx="6" fill="#B9E3C8"/>
+    <rect x="918" y="176" width="200" height="12" rx="6" fill="#D6EFE0"/>
+    <rect x="918" y="206" width="150" height="12" rx="6" fill="#D6EFE0"/>
+  </g>
+  <g opacity="0.55">
+    <rect x="194" y="807" width="310" height="152" rx="28" fill="#FFFFFF"/>
+    <rect x="232" y="848" width="88" height="12" rx="6" fill="#B9E3C8"/>
+    <rect x="232" y="884" width="230" height="12" rx="6" fill="#D6EFE0"/>
+    <rect x="232" y="916" width="188" height="12" rx="6" fill="#D6EFE0"/>
+  </g>
+  <defs>
+    <filter id="glow" x="87" y="130" width="1433" height="708" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+      <feGaussianBlur stdDeviation="8" result="effect1_foregroundBlur_2026"/>
+    </filter>
+  </defs>
+</svg>

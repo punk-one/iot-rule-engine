@@ -1,0 +1,37 @@
+# Local IDE and caches
+.vscode/
+.gocache/
+.claude/
+.worktrees/
+.cursor/
+
+# Credentials must be provisioned outside Git.
+*.creds
+
+# Local runtime artifacts
+log-file.txt
+data
+# Local build outputs
+main
+__debug_bin*
+ui/build
+
+# Deploy build artifacts (keep scripts/configs tracked)
+deploy/frontend/build/
+deploy/backend/punk-rule-engine
+deploy/backend/plugins/
+deploy/backend/data/
+deploy/backend/logs/
+deploy/punk-rule-engine/
+deploy/*.tar.gz
+deploy/*.env
+!deploy/*.env.tpl
+ui/node_modules
+logs
+tmp
+bin
+/docs/*
+!/docs/*.md
+!/docs/audit-repros-2026-09-09/
+/plugins/
+tools

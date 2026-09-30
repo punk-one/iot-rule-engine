@@ -1,0 +1,14 @@
+.git
+.gitignore
+.vscode
+.gocache
+.claude
+data
+logs
+tmp
+ui/node_modules
+ui/build
+deploy/frontend/build
+bin
+deploy
+docs

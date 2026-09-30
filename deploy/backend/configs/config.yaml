@@ -1,0 +1,95 @@
+# IoT Rule Engine 默认配置
+# 项目版本：v1.0.0
+common:
+  nats:
+    mode: "internal"                   # internal, external
+    host: "127.0.0.1"                 # internal mode only
+    port: 0                             # 0 selects a random available port
+    store_dir: "./data/nats"           # internal JetStream storage
+    url: ""                             # external mode only
+    auth_mode: "none"                  # external: none, user, token, tls, creds
+    max_reconnects: -1                 # -1 means retry forever
+    reconnect_wait_ms: 2000
+
+# PostgreSQL 数据库配置（用于规则存储，manager.storage_type=postgres 时使用）
+database:
+  host: "127.0.0.1"
+  port: 5432
+  name: "punk_iot2"
+  user: "iot_rule"
+  password: ""                       # 通过部署 Secret 注入，不要提交真实密码
+  ssl_mode: "disable"
+  max_idle_conns: 10
+  max_open_conns: 100
+  conn_max_lifetime_minutes: 60
+
+# Redis 配置（用于 Stateful 插件状态缓存，executor.state_backend.type=redis 时使用）
+redis:
+  host: "127.0.0.1"
+  port: 6379
+  password: ""                       # 通过部署 Secret 注入
+  db: 0
+
+# 规则管理服务配置
+manager:
+  port: 11011
+  storage_type: "sqlite"               # sqlite | postgres
+  init_db: false
+  db_path: "./data"                    # 数据目录（存储 rules.db）
+
+executor:
+  plugins_dir: "./plugins"
+  worker_count: 1
+  node_error_history_limit: 100      # 节点错误历史保留条数
+
+  # Stateful 插件状态后端配置（如 ChangeDetect、WindowAggregate 等插件使用）
+  state_backend:
+    type: "memory"                     # memory | redis
+
+# pprof 性能分析（默认关闭，开启后可通过 /debug/pprof/ 访问）
+pprof:
+  enabled: false
+  block_profile_rate: 0      # 阻塞事件采样频率（纳秒），0 表示不采样
+  mutex_profile_fraction: 0  # 互斥锁竞争采样比例，0 表示不采样
+
+security:
+  plugin:
+    max_emit_qps: 10000
+    rpc_timeout_ms: 5000
+    max_payload_kb: 256
+    restart_base_delay_ms: 2000
+    restart_max_delay_ms: 30000
+    restart_max_retries: 5
+    restart_jitter_ratio: 0.2
+    restart_failure_threshold: 5
+    restart_circuit_cooldown_ms: 30000
+
+  dispatcher:
+    max_queue: 100000
+    rule_qps: 10000
+    node_qps: 1000
+    deduplication_window_ms: 1000
+    overflow_strategy: "reject"        # reject | drop_oldest | block
+
+  manager:
+    token: ""
+    auth_enabled: true
+    allow_insecure: false
+    allowed_origins: []
+    allow_runtime_plugin_install: false
+    trusted_plugin_manifest: ""
+    max_plugin_upload_mb: 64
+
+
+logging:
+  level: "debug"        # Log level: panic, fatal, error, warn, info, debug, trace (default: warn)
+  file: "./logs/engine.log"             # Log file path (empty = stdout, e.g., "~/daemon/logs/edge-daemon.log")
+  max_size: 100        # Max size per log file in MB (default: 100)
+  max_files: 5         # Max number of log files to keep (default: 5)
+  max_backups: 3       # Max number of backup files to keep (default: 3)
+  compress: false      # Compress rotated log files (default: false)
+  plugin_dir: "./logs/rules"   # Runtime log directory, files are named <rule-id>.log
+  plugin_max_size: 100         # Max size per rule log file in MB
+  plugin_max_files: 5          # Max number of rotated rule log files to keep
+  plugin_max_backups: 3        # Max number of rule backup files to keep
+  plugin_compress: false       # Compress rotated rule log files

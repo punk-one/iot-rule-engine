@@ -1,0 +1,78 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install UI dependencies
+        working-directory: ui
+        run: npm ci
+
+      - name: Test UI
+        working-directory: ui
+        run: npm test -- --runInBand
+        env:
+          CI: true
+
+      - name: Build UI
+        working-directory: ui
+        run: npm run build
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out engine
+        uses: actions/checkout@v4
+        with:
+          path: iot-rule-engine
+
+      - name: Check out SDK v1 contract
+        uses: actions/checkout@v4
+        with:
+          repository: punk-one/iot-rule-plugin-sdk
+          ref: v1.0.0
+          path: iot-rule-plugin-sdk
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: iot-rule-engine/go.mod
+          cache-dependency-path: |
+            iot-rule-engine/go.sum
+            iot-rule-plugin-sdk/go.sum
+
+      - name: Create local workspace
+        run: go work init ./iot-rule-engine ./iot-rule-plugin-sdk
+
+      - name: Test
+        working-directory: iot-rule-engine
+        run: go test ./...
+
+      - name: Race detector
+        working-directory: iot-rule-engine
+        run: go test -race ./...
+
+      - name: Vet
+        working-directory: iot-rule-engine
+        run: go vet ./...
+
+      - name: Check whitespace
+        working-directory: iot-rule-engine
+        run: git diff --check

@@ -1,0 +1,15 @@
+services:
+  iot-rule-engine-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.deploy
+    container_name: iot-rule-engine-frontend
+    restart: unless-stopped
+    ports:
+      - "3101:80"
+    environment:
+      BACKEND_HOST: "host.docker.internal"
+      BACKEND_PORT: "11011"
+      NGINX_ENVSUBST_FILTER: ^BACKEND_(HOST|PORT)$
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
