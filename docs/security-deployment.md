@@ -25,6 +25,7 @@ IOT_RULE_NATS_CERT_FILE
 IOT_RULE_NATS_KEY_FILE
 IOT_RULE_NATS_CA_FILE
 IOT_RULE_MANAGER_TOKEN
+IOT_RULE_PLUGIN_REGISTRY_TOKEN
 ```
 
 环境变量在 YAML 和数据库配置之后应用，因此可用于部署时最终覆盖。
@@ -43,9 +44,16 @@ security:
     allow_runtime_plugin_install: true
     trusted_plugin_manifest: "/etc/iot-rule/trusted/release-manifest.json"
     max_plugin_upload_mb: 64
+    plugin_registry_url: "https://rule.punkiot.com"
+    plugin_registry_token_env: "IOT_RULE_PLUGIN_REGISTRY_TOKEN"
+    cosign_path: "/usr/local/bin/cosign"
+    sigstore_issuer: "https://token.actions.githubusercontent.com"
+    sigstore_identity_regexp: '^https://github\.com/punk-one/iot-rule-plugins/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
 ```
 
 release manifest 必须由发布流水线在引擎外完成签名验证，并以只读、管理员不可通过 API 修改的方式挂载。引擎会在首次执行上传文件之前校验 manifest 中的 artifact SHA-256、ID、版本、类型和精确 SDK 标识 `github.com/punk-one/iot-rule-plugin-sdk@v1.0.0`。
+
+从 Registry 安装时，引擎不会只信任 Hub 的判定。它会限制下载地址为 Registry 同源 HTTPS，限制文件大小，重新校验 SHA-256，使用 cosign 对 Sigstore Bundle、OIDC issuer 和工作流身份进行校验，然后启动临时插件进程核对握手 ID、版本和类型。只有全部通过后才原子安装；升级加载失败时恢复旧插件进程。私有 Registry Token 只从 `plugin_registry_token_env` 指定的环境变量读取，不写入 SQLite 或配置响应。
 
 这仍不是操作系统沙箱。生产环境应让插件进程运行在独立低权限用户或容器中，并按需限制网络、文件系统、系统调用、CPU 与内存。
 

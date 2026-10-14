@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Descriptions, Input, Modal, Select, Space, Table, Tag, Typography, type TableProps } from 'antd';
-import { DeleteOutlined, InfoCircleOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Alert, Button, Descriptions, Input, Modal, Select, Space, Table, Tabs, Tag, Typography, type TableProps } from 'antd';
+import { CloudDownloadOutlined, DeleteOutlined, InfoCircleOutlined, PlusOutlined, ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons';
 import { usePluginStore } from '../store/pluginStore';
-import { connectorsAPI, rulesAPI } from '../services/api';
+import { connectorsAPI, pluginsAPI, rulesAPI } from '../services/api';
 import { ConsolePage } from '../components/ConsolePage';
 import { ActionButton, FilterBar, StatusTag } from '../components/ui/ConsoleUI';
 import { useFeedback } from '../components/FeedbackProvider';
 import { ResourceTabs } from '../components/ResourceTabs';
-import { ConnectorResourceView, PluginMeta, RuleFlow } from '../types';
+import { ConnectorResourceView, PluginMeta, RegistryCatalogItem, RuleFlow } from '../types';
 
 type PluginUsage = Pick<RuleFlow, 'id' | 'name' | 'enabled' | 'status'>;
 type DependencyWarning = {
@@ -29,6 +29,9 @@ export const PluginManagerPage: React.FC = () => {
   const [detailPlugin, setDetailPlugin] = useState<PluginMeta | null>(null);
   const [dependencyWarning, setDependencyWarning] = useState<DependencyWarning | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'installed' | 'marketplace'>('installed');
+  const [registryPlugins, setRegistryPlugins] = useState<RegistryCatalogItem[]>([]);
+  const [registryLoading, setRegistryLoading] = useState(false);
   const pendingActionRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -45,6 +48,31 @@ export const PluginManagerPage: React.FC = () => {
   const finishAction = () => {
     pendingActionRef.current = null;
     setPendingAction(null);
+  };
+
+  const loadRegistry = async () => {
+    setRegistryLoading(true);
+    try {
+      setRegistryPlugins(await pluginsAPI.listRegistry());
+    } catch (error: any) {
+      feedback.error(`插件市场加载失败：${error.message || '未知错误'}`);
+    } finally {
+      setRegistryLoading(false);
+    }
+  };
+
+  const handleRegistryInstall = async (item: RegistryCatalogItem) => {
+    const key = `registry:${item.plugin.plugin}`;
+    if (!startAction(key)) return;
+    try {
+      await pluginsAPI.installFromRegistry(item.plugin.plugin, item.plugin.version, item.plugin.os, item.plugin.arch);
+      await loadPlugins();
+      feedback.success(`插件 ${item.plugin.plugin} ${item.plugin.version} 已完成签名校验并安装`);
+    } catch (error: any) {
+      feedback.error(`安装失败：${error.message || '未知错误'}`);
+    } finally {
+      finishAction();
+    }
   };
 
   const findPluginDependencies = async (pluginId: string) => {
@@ -223,6 +251,20 @@ export const PluginManagerPage: React.FC = () => {
     <ConsolePage maxWidth={1600}>
       <ResourceTabs />
       <h1 className="sr-only">插件管理</h1>
+      <Tabs
+        activeKey={activeView}
+        onChange={(key) => {
+          const next = key as 'installed' | 'marketplace';
+          setActiveView(next);
+          if (next === 'marketplace' && registryPlugins.length === 0) void loadRegistry();
+        }}
+        items={[
+          { key: 'installed', label: '已安装插件' },
+          { key: 'marketplace', label: '插件市场' },
+        ]}
+      />
+      {activeView === 'installed' ? (
+      <>
       <FilterBar
         summary={`共 ${filteredPlugins.length} / ${plugins.length} 个插件`}
         actions={
@@ -265,6 +307,17 @@ export const PluginManagerPage: React.FC = () => {
           scroll={{ x: 1180 }}
         />
       </section>
+      </>
+      ) : (
+        <PluginMarketplace
+          items={registryPlugins}
+          installed={plugins}
+          loading={registryLoading}
+          pendingAction={pendingAction}
+          onReload={() => void loadRegistry()}
+          onInstall={(item) => void handleRegistryInstall(item)}
+        />
+      )}
 
       <PluginDetailModal plugin={detailPlugin} onClose={() => setDetailPlugin(null)} />
 
@@ -340,6 +393,46 @@ export const PluginManagerPage: React.FC = () => {
         </div>
       </Modal>
     </ConsolePage>
+  );
+};
+
+const PluginMarketplace: React.FC<{
+  items: RegistryCatalogItem[];
+  installed: PluginMeta[];
+  loading: boolean;
+  pendingAction: string | null;
+  onReload: () => void;
+  onInstall: (item: RegistryCatalogItem) => void;
+}> = ({ items, installed, loading, pendingAction, onReload, onInstall }) => {
+  const installedVersions = new Map(installed.map((plugin) => [plugin.id, plugin.version]));
+  const columns: NonNullable<TableProps<RegistryCatalogItem>['columns']> = [
+    { title: '插件', render: (_, item) => <><strong>{item.plugin.plugin}</strong><div className="plugin-manager__id">{item.plugin.filename}</div></> },
+    { title: '版本', width: 100, align: 'center', render: (_, item) => item.plugin.version },
+    { title: '类型', width: 110, align: 'center', render: (_, item) => <Tag color={getTypeColor(item.plugin.type)}>{getTypeText(item.plugin.type)}</Tag> },
+    { title: '平台', width: 140, align: 'center', render: (_, item) => `${item.plugin.os}/${item.plugin.arch}` },
+    { title: '供应链', width: 130, align: 'center', render: () => <StatusTag tone="success"><SafetyCertificateOutlined /> Sigstore</StatusTag> },
+    {
+      title: '操作', width: 140, align: 'center',
+      render: (_, item) => {
+        const installedVersion = installedVersions.get(item.plugin.plugin);
+        const busy = pendingAction === `registry:${item.plugin.plugin}`;
+        return (
+          <ActionButton type="primary" icon={<CloudDownloadOutlined />} disabled={pendingAction !== null || installedVersion === item.plugin.version.replace(/^v/, '')} loading={busy} onClick={() => onInstall(item)}>
+            {installedVersion ? (installedVersion === item.plugin.version.replace(/^v/, '') ? '已安装' : '升级') : '安装'}
+          </ActionButton>
+        );
+      },
+    },
+  ];
+  return (
+    <>
+      <FilterBar summary={`共 ${items.length} 个已验证制品`} actions={<Button icon={<ReloadOutlined />} loading={loading} onClick={onReload}>刷新</Button>}>
+        <Typography.Text type="secondary">制品将在下载后再次校验 SHA-256、Sigstore 身份和插件握手信息。</Typography.Text>
+      </FilterBar>
+      <section className="console-surface">
+        <Table<RegistryCatalogItem> columns={columns} dataSource={items} loading={loading} rowKey={(item) => `${item.plugin.plugin}:${item.plugin.version}:${item.plugin.os}:${item.plugin.arch}`} pagination={{ defaultPageSize: 20 }} scroll={{ x: 980 }} />
+      </section>
+    </>
   );
 };
 

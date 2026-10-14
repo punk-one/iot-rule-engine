@@ -55,6 +55,11 @@ export const ConfigForm: React.FC<ConfigFormProps> = ({ config, onChange }) => {
           allow_runtime_plugin_install: config.security?.manager?.allow_runtime_plugin_install ?? false,
           trusted_plugin_manifest: config.security?.manager?.trusted_plugin_manifest || '',
           max_plugin_upload_mb: config.security?.manager?.max_plugin_upload_mb || 64,
+          plugin_registry_url: config.security?.manager?.plugin_registry_url || 'https://rule.punkiot.com',
+          plugin_registry_token_env: config.security?.manager?.plugin_registry_token_env || 'IOT_RULE_PLUGIN_REGISTRY_TOKEN',
+          cosign_path: config.security?.manager?.cosign_path || 'cosign',
+          sigstore_issuer: config.security?.manager?.sigstore_issuer || 'https://token.actions.githubusercontent.com',
+          sigstore_identity_regexp: config.security?.manager?.sigstore_identity_regexp || '',
         },
       },
       manager: {
@@ -355,6 +360,39 @@ export const ConfigForm: React.FC<ConfigFormProps> = ({ config, onChange }) => {
                       value={safeConfig.security.manager.max_plugin_upload_mb}
                       onChange={(v) => updateNestedField(['security', 'manager'], 'max_plugin_upload_mb', Number(v))}
                       type="number"
+                    />
+                    <ConfigField
+                      label="插件市场地址"
+                      value={safeConfig.security.manager.plugin_registry_url}
+                      onChange={(v) => updateNestedField(['security', 'manager'], 'plugin_registry_url', v)}
+                      type="text"
+                      hint="生产环境必须使用 HTTPS，例如 https://rule.punkiot.com"
+                    />
+                    <ConfigField
+                      label="Registry Token 环境变量"
+                      value={safeConfig.security.manager.plugin_registry_token_env}
+                      onChange={(v) => updateNestedField(['security', 'manager'], 'plugin_registry_token_env', v)}
+                      type="text"
+                      hint="仅保存环境变量名称，不在数据库中保存令牌值"
+                    />
+                    <ConfigField
+                      label="Cosign 路径"
+                      value={safeConfig.security.manager.cosign_path}
+                      onChange={(v) => updateNestedField(['security', 'manager'], 'cosign_path', v)}
+                      type="text"
+                    />
+                    <ConfigField
+                      label="Sigstore OIDC Issuer"
+                      value={safeConfig.security.manager.sigstore_issuer}
+                      onChange={(v) => updateNestedField(['security', 'manager'], 'sigstore_issuer', v)}
+                      type="text"
+                    />
+                    <ConfigField
+                      label="签名身份正则"
+                      value={safeConfig.security.manager.sigstore_identity_regexp}
+                      onChange={(v) => updateNestedField(['security', 'manager'], 'sigstore_identity_regexp', v)}
+                      type="text"
+                      hint="只允许受信任仓库、工作流和正式版本标签"
                     />
                   </>
                 )}

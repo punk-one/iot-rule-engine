@@ -38,6 +38,11 @@ type ManagerSecurityConfig struct {
 	AllowRuntimePluginInstall bool     `yaml:"allow_runtime_plugin_install" json:"allow_runtime_plugin_install"`
 	TrustedPluginManifest     string   `yaml:"trusted_plugin_manifest" json:"trusted_plugin_manifest"`
 	MaxPluginUploadMB         int64    `yaml:"max_plugin_upload_mb" json:"max_plugin_upload_mb"`
+	PluginRegistryURL         string   `yaml:"plugin_registry_url" json:"plugin_registry_url"`
+	PluginRegistryTokenEnv    string   `yaml:"plugin_registry_token_env" json:"plugin_registry_token_env"`
+	CosignPath                string   `yaml:"cosign_path" json:"cosign_path"`
+	SigstoreIssuer            string   `yaml:"sigstore_issuer" json:"sigstore_issuer"`
+	SigstoreIdentityRegexp    string   `yaml:"sigstore_identity_regexp" json:"sigstore_identity_regexp"`
 }
 
 // applySecurityDefaults 应用安全配置默认值
@@ -94,5 +99,17 @@ func applySecurityDefaults(cfg *Config) {
 	}
 	if cfg.Security.Manager.MaxPluginUploadMB <= 0 {
 		cfg.Security.Manager.MaxPluginUploadMB = 64
+	}
+	if cfg.Security.Manager.PluginRegistryTokenEnv == "" {
+		cfg.Security.Manager.PluginRegistryTokenEnv = "IOT_RULE_PLUGIN_REGISTRY_TOKEN"
+	}
+	if cfg.Security.Manager.CosignPath == "" {
+		cfg.Security.Manager.CosignPath = "cosign"
+	}
+	if cfg.Security.Manager.SigstoreIssuer == "" {
+		cfg.Security.Manager.SigstoreIssuer = "https://token.actions.githubusercontent.com"
+	}
+	if cfg.Security.Manager.SigstoreIdentityRegexp == "" {
+		cfg.Security.Manager.SigstoreIdentityRegexp = `^https://github\.com/punk-one/iot-rule-plugins/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`
 	}
 }

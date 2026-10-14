@@ -83,6 +83,11 @@ security:
     allow_runtime_plugin_install: false
     trusted_plugin_manifest: ""
     max_plugin_upload_mb: 64
+    plugin_registry_url: "https://rule.punkiot.com"
+    plugin_registry_token_env: "IOT_RULE_PLUGIN_REGISTRY_TOKEN"
+    cosign_path: "cosign"
+    sigstore_issuer: "https://token.actions.githubusercontent.com"
+    sigstore_identity_regexp: '^https://github\.com/punk-one/iot-rule-plugins/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
 
 
 logging:

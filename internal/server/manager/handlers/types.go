@@ -22,9 +22,14 @@ type Manager struct {
 }
 
 type PluginInstallPolicy struct {
-	Enabled             bool
-	TrustedManifestPath string
-	MaxUploadBytes      int64
+	Enabled                bool
+	TrustedManifestPath    string
+	MaxUploadBytes         int64
+	RegistryURL            string
+	RegistryToken          string
+	CosignPath             string
+	SigstoreIssuer         string
+	SigstoreIdentityRegexp string
 }
 
 // NewManager 创建新的 Manager
@@ -55,6 +60,15 @@ func NewManagerWithLoader(db rulesdb.RulesDB, pluginsDir string, executorURL str
 func (m *Manager) SetPluginInstallPolicy(policy PluginInstallPolicy) {
 	if policy.MaxUploadBytes <= 0 {
 		policy.MaxUploadBytes = 64 << 20
+	}
+	if policy.CosignPath == "" {
+		policy.CosignPath = "cosign"
+	}
+	if policy.SigstoreIssuer == "" {
+		policy.SigstoreIssuer = "https://token.actions.githubusercontent.com"
+	}
+	if policy.SigstoreIdentityRegexp == "" {
+		policy.SigstoreIdentityRegexp = `^https://github\.com/punk-one/iot-rule-plugins/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`
 	}
 	m.installPolicy = policy
 }

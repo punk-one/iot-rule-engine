@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,6 +37,11 @@ type ServerConfig struct {
 	AllowRuntimePluginInstall bool
 	TrustedPluginManifest     string
 	MaxPluginUploadBytes      int64
+	PluginRegistryURL         string
+	PluginRegistryToken       string
+	CosignPath                string
+	SigstoreIssuer            string
+	SigstoreIdentityRegexp    string
 	PProfEnabled              bool
 	PProfBlockRate            int
 	PProfMutexFraction        int
@@ -64,9 +70,14 @@ func NewServerWithLoader(cfg ServerConfig, db rulesdb.RulesDB, pluginsDir string
 	// 创建 handlers.Manager
 	mgr := handlers.NewManagerWithLoader(db, pluginsDir, cfg.ExecutorURL, runtimeMgr, pluginLoader)
 	mgr.SetPluginInstallPolicy(handlers.PluginInstallPolicy{
-		Enabled:             cfg.AllowRuntimePluginInstall,
-		TrustedManifestPath: cfg.TrustedPluginManifest,
-		MaxUploadBytes:      cfg.MaxPluginUploadBytes,
+		Enabled:                cfg.AllowRuntimePluginInstall,
+		TrustedManifestPath:    cfg.TrustedPluginManifest,
+		MaxUploadBytes:         cfg.MaxPluginUploadBytes,
+		RegistryURL:            cfg.PluginRegistryURL,
+		RegistryToken:          cfg.PluginRegistryToken,
+		CosignPath:             cfg.CosignPath,
+		SigstoreIssuer:         cfg.SigstoreIssuer,
+		SigstoreIdentityRegexp: cfg.SigstoreIdentityRegexp,
 	})
 
 	// 创建 Runtime Handlers
@@ -225,6 +236,8 @@ func (s *Server) registerPluginRoutes(api *gin.RouterGroup) {
 	api.POST("/plugins/:name/disable", requireAdmin(), s.manager.DisablePluginHandler)
 	api.DELETE("/plugins/:name", requireAdmin(), s.manager.DeletePluginHandler)
 	api.POST("/plugins/:name/upgrade", requireAdmin(), s.manager.UpgradePluginHandler)
+	api.GET("/plugins/registry/catalog", s.manager.ListRegistryPluginsHandler)
+	api.POST("/plugins/registry/:name/install", requireAdmin(), s.manager.InstallRegistryPluginHandler)
 }
 
 func (s *Server) registerConnectorRoutes(api *gin.RouterGroup) {
@@ -499,6 +512,11 @@ func RunWithServerEAndLoader(ctx context.Context, cfg *config.Config, runtimeMgr
 		AllowRuntimePluginInstall: cfg.Security.Manager.AllowRuntimePluginInstall,
 		TrustedPluginManifest:     cfg.Security.Manager.TrustedPluginManifest,
 		MaxPluginUploadBytes:      cfg.Security.Manager.MaxPluginUploadMB << 20,
+		PluginRegistryURL:         cfg.Security.Manager.PluginRegistryURL,
+		PluginRegistryToken:       os.Getenv(cfg.Security.Manager.PluginRegistryTokenEnv),
+		CosignPath:                cfg.Security.Manager.CosignPath,
+		SigstoreIssuer:            cfg.Security.Manager.SigstoreIssuer,
+		SigstoreIdentityRegexp:    cfg.Security.Manager.SigstoreIdentityRegexp,
 		PProfEnabled:              cfg.PProf.Enabled,
 		PProfBlockRate:            cfg.PProf.BlockProfileRate,
 		PProfMutexFraction:        cfg.PProf.MutexProfileFraction,

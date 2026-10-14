@@ -165,6 +165,28 @@ export interface PluginMeta {
   info?: PluginInfo; // PluginInfo 包含完整的插件能力声明
 }
 
+export interface RegistryPluginArtifact {
+  plugin: string;
+  version: string;
+  type: string;
+  sdk: string;
+  os: string;
+  arch: string;
+  filename: string;
+  sha256: string;
+  size: number;
+  visibility: 'public' | 'private';
+  release: string;
+  created_at: string;
+}
+
+export interface RegistryCatalogItem {
+  plugin: RegistryPluginArtifact;
+  download_url: string;
+  bundle_url: string;
+  sbom_url: string;
+}
+
 export type WarmupPolicy = 'lazy' | 'preload' | 'always_on';
 export type ResourceStatus =
   | 'unknown'

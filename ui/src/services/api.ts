@@ -4,6 +4,7 @@ import {
   PluginInfo,
   RuleSummary,
   PluginMeta,
+  RegistryCatalogItem,
   RuleValidationResult,
   RuleInstance,
   NodeInstance,
@@ -300,6 +301,16 @@ export const pluginsAPI = {
     const response = await api.post(`/plugins/${name}/upgrade`, formData);
     return response.data;
   },
+
+  listRegistry: async (): Promise<RegistryCatalogItem[]> => {
+    const response = await api.get('/plugins/registry/catalog');
+    return response.data.artifacts || [];
+  },
+
+  installFromRegistry: async (name: string, version: string, os = 'linux', arch = 'amd64'): Promise<PluginMeta> => {
+    const response = await api.post(`/plugins/registry/${name}/install`, { version, os, arch });
+    return response.data;
+  },
 };
 
 export const connectorsAPI = {
@@ -395,6 +406,11 @@ export interface SystemConfig {
       allow_runtime_plugin_install: boolean;
       trusted_plugin_manifest: string;
       max_plugin_upload_mb: number;
+      plugin_registry_url: string;
+      plugin_registry_token_env: string;
+      cosign_path: string;
+      sigstore_issuer: string;
+      sigstore_identity_regexp: string;
     };
   };
   manager: {
