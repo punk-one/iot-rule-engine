@@ -14,18 +14,16 @@ import (
 var openRulesDB = rulesdb.Open
 
 // Load 加载配置
-// 优先级：1. data/rules.db 中的配置 2. config.yaml 的默认值
-// path 参数为空时读取默认配置文件，否则读取指定配置文件
+// SQLite 保存运行配置；环境引导值控制实例位置和监听地址。
+// path 为空时使用内置默认值，显式路径保留 YAML 初始化兼容入口。
 func Load(path string) (*Config, error) {
-	configPath := path
-	if configPath == "" {
-		configPath = "configs/config.yaml"
-	}
-
-	// 1. 先从默认 YAML 加载基础配置（包括 StorageType）
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read default config %s: %w", configPath, err)
+	data := defaultConfig
+	if path != "" {
+		var err error
+		data, err = os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read bootstrap config %s: %w", path, err)
+		}
 	}
 
 	var cfg Config
@@ -33,8 +31,22 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal default config: %w", err)
 	}
 
-	// 2. 尝试从数据库读取配置并覆盖
+	// Deployment location must be applied before opening the database, and
+	// reapplied afterwards so persisted settings cannot relocate this instance.
+	if err := applyBootstrap(&cfg); err != nil {
+		return nil, err
+	}
+	if os.Getenv("IOT_RULE_DATA_DIR") != "" || os.Getenv("IOT_RULE_LISTEN") != "" || os.Getenv("IOT_RULE_PLUGINS_DIR") != "" {
+		var err error
+		data, err = yaml.Marshal(cfg)
+		if err != nil {
+			return nil, err
+		}
+	}
 	tryLoadConfigFromDB(&cfg, data)
+	if err := applyBootstrap(&cfg); err != nil {
+		return nil, err
+	}
 	applyEnvironmentSecrets(&cfg)
 
 	if err := NormalizeAndValidate(&cfg); err != nil {

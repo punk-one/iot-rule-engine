@@ -15,6 +15,7 @@ type DispatchTask struct {
 	Event    sdk.Event
 	Events   []sdk.Event
 	TraceCtx context.Context
+	Complete func(error) // transport acknowledgement, invoked after execution
 }
 
 // Clone creates a scheduler-owned task. Every Event and batch entry receives

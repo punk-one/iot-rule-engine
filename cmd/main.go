@@ -5,11 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/punk-one/iot-rule-engine/internal/infra/config"
 	"github.com/punk-one/iot-rule-engine/internal/server"
+	"github.com/punk-one/iot-rule-engine/internal/version"
 	pkglog "github.com/punk-one/iot-rule-engine/pkg/log"
 )
 
@@ -20,6 +22,10 @@ func main() {
 }
 
 func run() error {
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Println(version.String())
+		return nil
+	}
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -48,7 +54,7 @@ func run() error {
 }
 
 func loadConfig() (*config.Config, error) {
-	configPath := flag.String("config", "configs/config.yaml", "Path to configuration file")
+	configPath := flag.String("config", "", "Optional YAML bootstrap file (default: embedded configuration)")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)

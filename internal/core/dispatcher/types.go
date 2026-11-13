@@ -17,6 +17,6 @@ type RuleID string
 type RuleRuntime struct {
 	RuleID  string
 	Plugins map[string]client.PluginClient // nodeID -> client.PluginClient
-	Edges   map[string][]string     // fromNodeID -> []toNodeID
-	mu      sync.RWMutex            // 保护并发访问
+	Edges   map[string][]string            // fromNodeID -> []toNodeID
+	mu      sync.RWMutex                   // 保护并发访问
 }

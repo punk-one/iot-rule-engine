@@ -31,8 +31,8 @@ sibling `iot-rule-plugins` repository. Public plugin contracts belong in `iot-ru
 - Embedded NATS is the default (`internal`, loopback, port `0`). Never add repository credentials for it.
 - Manager API defaults to port `11011`. Development UI defaults to that address; production UI uses
   same-origin `/api/v1`. The port is a bootstrap setting, not an online-editable field.
-- SQLite configuration is authoritative after initial seeding, but the current release still requires a
-  YAML bootstrap file. Do not claim otherwise until the single-binary migration is implemented.
+- SQLite configuration is authoritative after initial seeding. Default configuration and release UI
+  are embedded; explicit --config retains YAML compatibility. Environment bootstrap values locate each instance.
 - Initial administrator plaintext comes only from `IOT_RULE_ADMIN_PASSWORD`; only its bcrypt hash is stored.
 
 ## Code map
@@ -53,7 +53,7 @@ sibling `iot-rule-plugins` repository. Public plugin contracts belong in `iot-ru
 - Validate destructive plugin operations against deployed-rule dependencies.
 - Runtime edge links must only be rendered when a retrievable edge detail resource exists.
 - Keep UI API calls centralized in `ui/src/services/api.ts` and preserve same-origin production behavior.
-- Keep English as the default repository README and maintain `README.zh-CN.md` for Chinese readers.
+- Keep Chinese as the default README.md, English in README.en.md, and README.zh-CN.md as a compatibility link.
 - Never include live IPs, credentials, certificates, customer names, PLC addresses, or production payloads
   in examples. Use reserved documentation networks and synthetic data.
 

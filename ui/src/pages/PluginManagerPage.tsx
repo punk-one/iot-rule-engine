@@ -32,6 +32,9 @@ export const PluginManagerPage: React.FC = () => {
   const [activeView, setActiveView] = useState<'installed' | 'marketplace'>('installed');
   const [registryPlugins, setRegistryPlugins] = useState<RegistryCatalogItem[]>([]);
   const [registryLoading, setRegistryLoading] = useState(false);
+  const [rollbackPlugin, setRollbackPlugin] = useState<PluginMeta | null>(null);
+  const [cachedVersions, setCachedVersions] = useState<RegistryCatalogItem[]>([]);
+  const [rollbackVersion, setRollbackVersion] = useState<string>();
   const pendingActionRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -73,6 +76,27 @@ export const PluginManagerPage: React.FC = () => {
     } finally {
       finishAction();
     }
+  };
+
+  const openRollback = async (plugin: PluginMeta) => {
+    if (!startAction(`versions:${plugin.id}`)) return;
+    try {
+      const versions = await pluginsAPI.versions(plugin.id);
+      setCachedVersions(versions.filter((item) => item.plugin.version.replace(/^v/, '') !== plugin.version));
+      setRollbackVersion(undefined);
+      setRollbackPlugin(plugin);
+    } catch (error: any) { feedback.error(`版本列表加载失败：${error.message}`); }
+    finally { finishAction(); }
+  };
+
+  const handleRollback = async () => {
+    if (!rollbackPlugin || !rollbackVersion || !startAction(`rollback:${rollbackPlugin.id}`)) return;
+    try {
+      await pluginsAPI.rollback(rollbackPlugin.id, rollbackVersion);
+      await loadPlugins(); setRollbackPlugin(null);
+      feedback.success('已校验并恢复插件版本');
+    } catch (error: any) { feedback.error(`回滚失败：${error.message}`); }
+    finally { finishAction(); }
   };
 
   const findPluginDependencies = async (pluginId: string) => {
@@ -231,6 +255,7 @@ export const PluginManagerPage: React.FC = () => {
               {plugin.enabled ? '禁用' : '启用'}
             </ActionButton>
             <Button size="small" icon={<InfoCircleOutlined />} data-testid={`plugin-detail-open-${plugin.id}`} onClick={() => setDetailPlugin(plugin)}>详情</Button>
+            <Button size="small" disabled={pendingAction !== null} onClick={() => void openRollback(plugin)}>回滚</Button>
             <ActionButton
               size="small"
               danger
@@ -320,6 +345,10 @@ export const PluginManagerPage: React.FC = () => {
       )}
 
       <PluginDetailModal plugin={detailPlugin} onClose={() => setDetailPlugin(null)} />
+      <Modal title={`回滚 ${rollbackPlugin?.name || ''}`} open={rollbackPlugin !== null} onCancel={() => setRollbackPlugin(null)} onOk={() => void handleRollback()} okButtonProps={{ disabled: !rollbackVersion }} confirmLoading={pendingAction?.startsWith('rollback:')}>
+        <p>选择本机已验证并缓存的版本。使用中的插件需要先停止相关规则。</p>
+        <Select style={{ width: '100%' }} placeholder={cachedVersions.length ? '选择版本' : '没有可回滚的缓存版本'} value={rollbackVersion} onChange={setRollbackVersion} options={cachedVersions.map((item) => ({ value: item.plugin.version, label: `${item.plugin.version} · ${item.plugin.os}/${item.plugin.arch}` }))} />
+      </Modal>
 
       <Modal
         title={dependencyWarning ? `无法${dependencyWarning.action}插件` : ''}
@@ -404,10 +433,22 @@ const PluginMarketplace: React.FC<{
   onReload: () => void;
   onInstall: (item: RegistryCatalogItem) => void;
 }> = ({ items, installed, loading, pendingAction, onReload, onInstall }) => {
+  const [query, setQuery] = useState('');
+  const [selection, setSelection] = useState<Record<string, string>>({});
+  const grouped = new Map<string, RegistryCatalogItem[]>();
+  items.forEach((item) => {
+    const id = item.plugin.plugin;
+    grouped.set(id, [...(grouped.get(id) || []), item]);
+  });
+  const itemKey = (item: RegistryCatalogItem) => `${item.plugin.version}:${item.plugin.os}:${item.plugin.arch}`;
+  const displayed = Array.from(grouped.entries()).filter(([id]) => id.toLowerCase().includes(query.toLowerCase())).map(([id, versions]) => {
+    const sorted = [...versions].sort((a, b) => Number(b.compatible !== false) - Number(a.compatible !== false) || b.plugin.version.localeCompare(a.plugin.version, undefined, { numeric: true }));
+    return sorted.find((item) => itemKey(item) === selection[id]) || sorted[0];
+  });
   const installedVersions = new Map(installed.map((plugin) => [plugin.id, plugin.version]));
   const columns: NonNullable<TableProps<RegistryCatalogItem>['columns']> = [
     { title: '插件', render: (_, item) => <><strong>{item.plugin.plugin}</strong><div className="plugin-manager__id">{item.plugin.filename}</div></> },
-    { title: '版本', width: 100, align: 'center', render: (_, item) => item.plugin.version },
+    { title: '版本', width: 240, render: (_, item) => <Select style={{ width: '100%' }} value={itemKey(item)} onChange={(value) => setSelection((current) => ({ ...current, [item.plugin.plugin]: value }))} options={(grouped.get(item.plugin.plugin) || []).map((version) => ({ value: itemKey(version), label: `${version.plugin.version} · ${version.plugin.arch}${version.compatible === false ? '（平台不匹配）' : ''}` }))} /> },
     { title: '类型', width: 110, align: 'center', render: (_, item) => <Tag color={getTypeColor(item.plugin.type)}>{getTypeText(item.plugin.type)}</Tag> },
     { title: '平台', width: 140, align: 'center', render: (_, item) => `${item.plugin.os}/${item.plugin.arch}` },
     { title: '供应链', width: 130, align: 'center', render: () => <StatusTag tone="success"><SafetyCertificateOutlined /> Sigstore</StatusTag> },
@@ -417,8 +458,8 @@ const PluginMarketplace: React.FC<{
         const installedVersion = installedVersions.get(item.plugin.plugin);
         const busy = pendingAction === `registry:${item.plugin.plugin}`;
         return (
-          <ActionButton type="primary" icon={<CloudDownloadOutlined />} disabled={pendingAction !== null || installedVersion === item.plugin.version.replace(/^v/, '')} loading={busy} onClick={() => onInstall(item)}>
-            {installedVersion ? (installedVersion === item.plugin.version.replace(/^v/, '') ? '已安装' : '升级') : '安装'}
+          <ActionButton type="primary" icon={<CloudDownloadOutlined />} disabled={item.compatible === false || pendingAction !== null || installedVersion === item.plugin.version.replace(/^v/, '')} loading={busy} onClick={() => onInstall(item)}>
+            {item.compatible === false ? '不兼容' : installedVersion ? (installedVersion === item.plugin.version.replace(/^v/, '') ? '已安装' : '安装此版本') : '安装'}
           </ActionButton>
         );
       },
@@ -426,11 +467,11 @@ const PluginMarketplace: React.FC<{
   ];
   return (
     <>
-      <FilterBar summary={`共 ${items.length} 个已验证制品`} actions={<Button icon={<ReloadOutlined />} loading={loading} onClick={onReload}>刷新</Button>}>
-        <Typography.Text type="secondary">制品将在下载后再次校验 SHA-256、Sigstore 身份和插件握手信息。</Typography.Text>
+      <FilterBar summary={`共 ${grouped.size} 个插件`} actions={<Button icon={<ReloadOutlined />} loading={loading} onClick={onReload}>刷新</Button>}>
+        <Input.Search allowClear placeholder="搜索插件" value={query} onChange={(event) => setQuery(event.target.value)} />
       </FilterBar>
       <section className="console-surface">
-        <Table<RegistryCatalogItem> columns={columns} dataSource={items} loading={loading} rowKey={(item) => `${item.plugin.plugin}:${item.plugin.version}:${item.plugin.os}:${item.plugin.arch}`} pagination={{ defaultPageSize: 20 }} scroll={{ x: 980 }} />
+        <Table<RegistryCatalogItem> columns={columns} dataSource={displayed} loading={loading} rowKey={(item) => item.plugin.plugin} pagination={{ defaultPageSize: 20 }} scroll={{ x: 980 }} />
       </section>
     </>
   );

@@ -1,5 +1,12 @@
 # 文档索引
 
+**一切皆插件。**
+
+- [多网关应用架构](multi-gateway.md)
+- [Node-RED 对比](node-red-comparison.md)
+- [工程化实施与验收](engineering-verification.md)
+- [Linux 安装脚本](../deploy/iot-rule-engine.sh)
+
 ## 当前审计
 
 - [前后端、代码与文档复审（2026-09-18）](./reaudit-2026-09-18.md)

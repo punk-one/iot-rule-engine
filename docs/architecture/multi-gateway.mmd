@@ -1,0 +1,23 @@
+flowchart TB
+  FLEET[IoT 管理平台 / Fleet：规划中的集中管理]
+  HUB[Plugin Hub：版本、签名、按需安装]
+  subgraph F[工厂：多个独立 Linux 采集网关]
+    D1[设备 001] <--> G1[网关 01 · ARM64\nEngine + UI · 多规则链]
+    D2[同类设备 002～020] <--> G2[网关 02 · AMD64\nEngine + UI · 多规则链]
+    DN[其他设备组] <--> GN[网关 N · ARM64/AMD64\nEngine + UI · 多规则链]
+  end
+  G1 <--> MQTT[外部 MQTT Broker]
+  G2 <--> MQTT
+  GN <--> MQTT
+  MQTT <--> SERVER[服务器：一个 IoT Rule Engine\n管理 UI · 多条 MQTT 处理规则]
+  SERVER --> REDIS[Redis 缓存 / 关系映射]
+  SERVER --> TSDB[TimescaleDB / TDengine]
+  SERVER --> DB[业务数据库]
+  G1 -. 出站管理通道 .-> FLEET
+  G2 -. 出站管理通道 .-> FLEET
+  GN -. 出站管理通道 .-> FLEET
+  SERVER -. 管理通道 .-> FLEET
+  G1 -. HTTPS 按需拉取 .-> HUB
+  G2 -. HTTPS 按需拉取 .-> HUB
+  GN -. HTTPS 按需拉取 .-> HUB
+  SERVER -. HTTPS 按需拉取 .-> HUB

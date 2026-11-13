@@ -307,7 +307,15 @@ export const pluginsAPI = {
     return response.data.artifacts || [];
   },
 
-  installFromRegistry: async (name: string, version: string, os = 'linux', arch = 'amd64'): Promise<PluginMeta> => {
+  versions: async (name: string): Promise<RegistryCatalogItem[]> => {
+    const response = await api.get(`/plugins/${name}/versions`);
+    return response.data.versions || [];
+  },
+  rollback: async (name: string, version: string): Promise<PluginMeta> => {
+    const response = await api.post(`/plugins/${name}/rollback`, { version });
+    return response.data;
+  },
+  installFromRegistry: async (name: string, version: string, os?: string, arch?: string): Promise<PluginMeta> => {
     const response = await api.post(`/plugins/registry/${name}/install`, { version, os, arch });
     return response.data;
   },

@@ -1,0 +1,63 @@
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --draft --generate-notes
+  engine:
+    needs: prepare
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - uses: sigstore/cosign-installer@v3
+      - run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: go test ./cmd ./internal/infra/config ./internal/webui ./internal/core/dispatcher/... && go vet ./...
+        env:
+          GOWORK: off
+      - run: ./deploy/release.sh
+        env:
+          VERSION: ${{ github.ref_name }}
+          GOARCH: ${{ matrix.arch }}
+          CC: musl-gcc
+          EXTRA_LDFLAGS: -linkmode external -extldflags -static
+          RELEASE_SIGN: '1'
+      - run: dist/iot-rule-engine-${{ github.ref_name }}-linux-${{ matrix.arch }}/iot-rule-engine --version
+      - name: Start the native executable with embedded UI and an empty data directory
+        run: bash deploy/smoke-release.sh dist/iot-rule-engine-${{ github.ref_name }}-linux-${{ matrix.arch }}/iot-rule-engine
+      - name: Upload individually signed platform package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.sha256 dist/*.sigstore.json
+  publish:
+    needs: engine
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit "$GITHUB_REF_NAME" --draft=false

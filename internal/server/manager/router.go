@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -24,11 +25,13 @@ import (
 	"github.com/punk-one/iot-rule-engine/internal/infra/storage/rulesdb"
 	"github.com/punk-one/iot-rule-engine/internal/server/manager/handlers"
 	"github.com/punk-one/iot-rule-engine/internal/server/manager/userauth"
+	"github.com/punk-one/iot-rule-engine/internal/webui"
 	pkglog "github.com/punk-one/iot-rule-engine/pkg/log"
 )
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
+	Host                      string
 	Port                      int
 	AuthEnabled               bool
 	AuthToken                 string
@@ -99,6 +102,7 @@ func (s *Server) SetupRouter() *gin.Engine {
 
 	// CORS 中间件
 	router.Use(corsMiddleware(s.config.AllowedOrigins))
+	router.Use(webui.Middleware())
 
 	// 鉴权中间件
 	router.Use(authMiddlewareWrapper(s.config.AuthToken, s.config.AuthEnabled, s.authService))
@@ -236,6 +240,8 @@ func (s *Server) registerPluginRoutes(api *gin.RouterGroup) {
 	api.POST("/plugins/:name/disable", requireAdmin(), s.manager.DisablePluginHandler)
 	api.DELETE("/plugins/:name", requireAdmin(), s.manager.DeletePluginHandler)
 	api.POST("/plugins/:name/upgrade", requireAdmin(), s.manager.UpgradePluginHandler)
+	api.GET("/plugins/:name/versions", requireAdmin(), s.manager.PluginVersionsHandler)
+	api.POST("/plugins/:name/rollback", requireAdmin(), s.manager.RollbackPluginHandler)
 	api.GET("/plugins/registry/catalog", s.manager.ListRegistryPluginsHandler)
 	api.POST("/plugins/registry/:name/install", requireAdmin(), s.manager.InstallRegistryPluginHandler)
 }
@@ -308,7 +314,7 @@ func (s *Server) prepareHTTPServer() *http.Server {
 			s.SetupRouter()
 		}
 		s.httpServer = &http.Server{
-			Addr:              fmt.Sprintf(":%d", s.config.Port),
+			Addr:              net.JoinHostPort(s.config.Host, strconv.Itoa(s.config.Port)),
 			Handler:           s.router,
 			ReadHeaderTimeout: 5 * time.Second,
 			ReadTimeout:       30 * time.Second,
@@ -506,6 +512,7 @@ func RunWithServerEAndLoader(ctx context.Context, cfg *config.Config, runtimeMgr
 
 	serverCfg := ServerConfig{
 		Port:                      cfg.Manager.Port,
+		Host:                      cfg.Manager.Host,
 		AuthEnabled:               cfg.Security.Manager.AuthEnabled,
 		AuthToken:                 cfg.Security.Manager.Token,
 		AllowedOrigins:            cfg.Security.Manager.AllowedOrigins,

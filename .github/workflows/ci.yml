@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
 
+env:
+  GOWORK: off
+
 jobs:
   ui:
     runs-on: ubuntu-latest
@@ -54,7 +57,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: punk-one/iot-rule-plugins
-          ref: v1.0.0
           path: iot-rule-plugins
 
       - name: Set up Go
@@ -65,9 +67,6 @@ jobs:
             iot-rule-engine/go.sum
             iot-rule-plugin-sdk/go.sum
             iot-rule-plugins/**/go.sum
-
-      - name: Create local workspace
-        run: go work init ./iot-rule-engine ./iot-rule-plugin-sdk
 
       - name: Test
         working-directory: iot-rule-engine

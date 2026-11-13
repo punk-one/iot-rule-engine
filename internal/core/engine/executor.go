@@ -37,6 +37,7 @@ type Executor struct {
 	runtimeMgr     *runtime.Manager    // Runtime Manager
 	stateMgr       *state.StateManager // State Manager
 	dispatcherSec  *DispatcherSecurityConfig
+	deliveryConfig *DeliveryConfig
 	pluginDefaults PluginRuntimeDefaults
 	resourceBus    *connectorruntime.ResourceBus
 	connectorHost  *connectorruntime.Host
@@ -255,9 +256,9 @@ func (e *Executor) startRuleInstance(dag *DAG) error {
 	// 创建并启动 DAGNATSExecutor（支持 State Backend）
 	var executor *DAGNATSExecutor
 	if e.stateMgr != nil {
-		executor = NewDAGNATSExecutorWithDeliveryAndSecurityConfig(dag, e.runtimeMgr, instance.ID, e.stateMgr, nil, e.dispatcherSec)
+		executor = NewDAGNATSExecutorWithDeliveryAndSecurityConfig(dag, e.runtimeMgr, instance.ID, e.stateMgr, e.deliveryConfig, e.dispatcherSec)
 	} else {
-		executor = NewDAGNATSExecutorWithDeliveryAndSecurityConfig(dag, e.runtimeMgr, instance.ID, nil, nil, e.dispatcherSec)
+		executor = NewDAGNATSExecutorWithDeliveryAndSecurityConfig(dag, e.runtimeMgr, instance.ID, nil, e.deliveryConfig, e.dispatcherSec)
 	}
 	executor.SetResourceBus(e.resourceBus)
 
@@ -316,7 +317,7 @@ func (e *Executor) startPluginInstancesForRule(dag *DAG, executor *DAGNATSExecut
 		return nil
 	}
 
-	pluginInstances := e.buildPluginInstances(dag.RuleFlow)
+	pluginInstances := downstreamFirstInstances(dag.RuleFlow,e.buildPluginInstances(dag.RuleFlow))
 	cleanupIDs := make([]string, 0, len(pluginInstances))
 	activationErrors := make([]string, 0)
 
@@ -392,13 +393,11 @@ func (e *Executor) UnregisterDAG(ruleID string) {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 
-	// 停止 DAGNATSExecutor
-	if executor, exists := e.executors[ruleID]; exists {
-		if err := executor.Stop(); err != nil {
-			pkglog.Error("Failed to stop DAGNATSExecutor for rule %s: %v", ruleID, err)
-		}
-		delete(e.executors, ruleID)
-	}
+	// Stop event scheduling first, but keep node RPC authorization and connector
+	// bindings alive until each plugin has flushed health and closed its streams.
+	// Revoking them first makes SDK shutdown repeatedly retry its final report.
+	executor := e.executors[ruleID]
+	if executor != nil && executor.disp != nil { executor.disp.Stop() }
 
 	// Cleanup Plugin Instances via Registry
 	if e.pluginRegistry != nil {
@@ -411,6 +410,12 @@ func (e *Executor) UnregisterDAG(ruleID string) {
 				pkglog.Error("Failed to remove plugin instance %s: %v", inst.ID, err)
 			}
 		}
+	}
+	if executor != nil {
+		if err := executor.Stop(); err != nil {
+			pkglog.Error("Failed to stop DAGNATSExecutor for rule %s: %v", ruleID, err)
+		}
+		delete(e.executors, ruleID)
 	}
 
 	// 清理该规则的所有 RuleInstance（包括 stopped），确保取消部署后不残留运行态数据。

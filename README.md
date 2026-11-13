@@ -1,78 +1,65 @@
 # IoT Rule Engine
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+**一切皆插件，核心负责编排与治理。**
 
-IoT Rule Engine is an edge-oriented rule orchestration runtime written in Go. It connects industrial
-data sources, isolated plugins, routing rules, runtime observability, and a web management console in
-one deployable control plane.
+[简体中文](README.md) | [English](README.en.md)
 
-> Project status: active stabilization. The engine is currently versioned as `v1.0.0`; the plugin SDK
-> and official plugins target `v1.0.0`.
+IoT Rule Engine 是用 Go 编写的工业规则引擎，包含可视化管理 UI。一个工厂可以部署多个独立 Linux 采集网关，每个网关运行一个 Engine；服务器集中运行一个 Engine，承载多条业务规则。
 
-## Highlights
+## 应用架构
 
-- Visual DAG-based rule authoring and runtime inspection.
-- HTTP and MQTT ingress with an embedded NATS/JetStream bus by default.
-- Source, processor, sink, and connector plugins isolated in operating-system processes.
-- SQLite control-plane storage by default, with PostgreSQL and Redis integrations where configured.
-- Connector-aware plugins for S7, MQTT, Redis, PostgreSQL, TimescaleDB, and TDengine.
-- Per-branch event ownership to prevent shared mutable payload and metadata races.
-- A React management console for rules, connectors, plugins, users, settings, and runtime telemetry.
-
-## Repository family
-
-| Repository | Responsibility |
-| --- | --- |
-| `github.com/punk-one/iot-rule-engine` | Engine runtime, Manager API, ingress, scheduler, and web UI |
-| `github.com/punk-one/iot-rule-plugin-sdk` | Stable v1 plugin and connector contracts |
-| `github.com/punk-one/iot-rule-plugins` | Independently built official plugin artifacts |
-
-The engine repository does not contain production plugin implementations. Test fixtures may exist under
-internal test directories, while released plugins are maintained by the plugin repository.
-
-## Runtime model
-
-```text
-HTTP / MQTT
-     |
-  Ingress
-     |
-Embedded or external NATS
-     |
-  Pipeline ----> rule.input.<rule-id>
-     |
-  Executor ----> isolated plugin processes
-     |
- Runtime metrics / traces / DLQ
-
-Manager API <---- RulesDB / users / connectors / configuration
+```mermaid
+flowchart LR
+  subgraph 工厂现场
+    G1[网关 01 · ARM64<br/>设备 001 / Engine / UI]
+    G2[网关 02 · AMD64<br/>同类设备组 / Engine / UI]
+    GN[网关 N · ARM64或AMD64<br/>其他设备组 / Engine / UI]
+  end
+  G1 <--> M[外部 MQTT Broker]
+  G2 <--> M
+  GN <--> M
+  M <--> S[服务器：一个 Engine<br/>多条规则链 / 管理 UI]
+  S --> R[Redis]
+  S --> T[TimescaleDB / TDengine]
+  S --> D[业务数据库]
+  F[IoT 集中管理平台：规划] -. 升级与管理 .-> G1
+  F -. 升级与管理 .-> G2
+  F -. 升级与管理 .-> GN
+  F -. 升级与管理 .-> S
 ```
 
-One plugin artifact maps to one long-lived OS process. Every rule node using that artifact receives its
-own plugin object, configuration, runtime context, and stop lifecycle inside the process. Starting more
-rules does not start duplicate processes for the same artifact.
+边缘链：`PLC Source → 转换 → 持久缓冲 → MQTT Sink`；下发链：`MQTT Source → 目标/有效期检查 → PLC Sink`。服务器通过 MQTT Source 接收多个网关数据，再经处理、映射和缓存分支写入时序库或业务数据库。
 
-## Quick start
+详见[多网关架构与可靠性边界](docs/multi-gateway.md)。西门子 S7 已有官方 Source/Connector/Sink；FANUC、三菱完整插件和 Fleet 集中管理仍为规划能力。
 
-Requirements:
+## 核心能力
 
-- Go 1.25 or newer.
-- Node.js 22 and npm for UI development.
-- Built official plugins when rules depend on external plugin nodes.
+- 多规则 DAG、不可变规则版本、部署实例和运行态指标。
+- Source、Processor、Sink、Connector 均通过 SDK 插件扩展。
+- 同一 Engine 内一个插件产物对应一个 OS 进程，多个规则节点获得独立实例。
+- 多个 Source/Sink 可绑定同一个 Connector Resource；不同网关的资源彼此独立。
+- S7 按需求复用会话，批量读、串行读写、latest-only 扫描和故障退避。
+- MQTT 长连接、数据库连接池、Redis 关系映射与 JavaScript 转换。
+- 内置 NATS 默认回环地址、随机端口；可靠模式持久化规则边。
+- SQLite 自动初始化；React UI 内嵌发行程序，API 与 UI 同源。
+- 插件市场按平台下载、校验 SHA-256、Sigstore 身份与握手；保留已验证版本用于回滚。
 
-The current release still uses `configs/config.yaml` as its bootstrap template. On the first start,
-provide a strong administrator password through a deployment secret:
+## 快速开始
+
+源码开发要求 Go 1.25+、Node.js 22。五个仓库独立构建，不需要 `go.work` 或本地 `replace`。
 
 ```bash
+export GOWORK=off
 export IOT_RULE_ADMIN_PASSWORD='Replace-With-A-Strong1!'
-go run ./cmd/main.go
+export IOT_RULE_DATA_DIR="$PWD/data"
+export IOT_RULE_LISTEN='127.0.0.1:11011'
+export IOT_RULE_INSTANCE_ID='factory-a-gateway-01'
+go run ./cmd
 ```
 
-The plaintext environment value is read only when the initial `admin` user is absent. The engine stores
-only a bcrypt hash in the control-plane database. Remove the secret from the long-running environment
-after successful initialization when your deployment platform allows it.
+首次管理员为 `admin`，只存 bcrypt 哈希；环境变量仅在首次创建时使用。`--config configs/config.yaml` 可显式使用旧 YAML 引导，省略时使用内置默认配置。已有数据库中的业务配置继续生效，部署环境决定数据库位置和监听地址。
 
-Start the development UI separately:
+前端开发使用另一个终端：
 
 ```bash
 cd ui
@@ -80,67 +67,35 @@ npm ci
 npm start
 ```
 
-Default endpoints:
+发行包通过 `deploy/release.sh` 先构建 UI 再嵌入 Engine。安装脚本源码在 `deploy/iot-rule-engine.sh`，支持 Linux AMD64/ARM64、systemd、版本校验、升级和回滚。正式发布版本通过 GitHub Release 提供，开发检出不自动安装全部插件。
 
-| Service | Address |
-| --- | --- |
-| Manager API | `http://localhost:11011/api/v1` |
-| Web UI (development) | `http://localhost:3000` |
-| HTTP ingress | `http://localhost:8087` |
-| MQTT ingress | `localhost:1883` |
+## 与 Node-RED 对比
 
-The development UI connects to `http://localhost:11011/api/v1` by default. Set
-`REACT_APP_API_URL` when the Manager is hosted elsewhere. Production builds use same-origin `/api/v1`.
-The bootstrap template explicitly permits the local development UI origins; replace them with the real
-HTTPS console origin in production. Same-origin requests are accepted without an allow-list entry.
+| 维度 | IoT Rule Engine | Node-RED |
+| --- | --- | --- |
+| 重点 | 工业设备采集、资源生命周期和受控运行 | 通用低代码集成、丰富社区节点和快速原型 |
+| 连接共享 | 一级 Connector Resource，统一探测、引用和协议策略 | configuration node 支持连接共享，行为取决于节点实现 |
+| 插件运行 | 进程隔离，规则实例独立 | 通常运行于 Node.js Runtime |
+| 交付 | 独立签名制品和受控 Hub | npm / Palette 生态更成熟广泛 |
 
-## Configuration
+不宣称未经基准测试的性能优势。[完整比较与官方资料](docs/node-red-comparison.md)。
 
-Configuration is loaded in this order:
+## 仓库与文档
 
-1. Bootstrap values from `configs/config.yaml`.
-2. Persisted system configuration from the control-plane database.
-3. Deployment secrets from `IOT_RULE_*` environment variables.
+- [Engine](https://github.com/punk-one/iot-rule-engine)：运行时、API、调度、Connector 治理和管理 UI。
+- [Plugin SDK](https://github.com/punk-one/iot-rule-plugin-sdk)：v1.0.0 公共契约，至少三年兼容承诺。
+- [Official Plugins](https://github.com/punk-one/iot-rule-plugins)：独立模块、独立版本和平台制品。
+- [文档入口](docs/README.md)、[连接生命周期](docs/connector-lifecycle-v1.md)、[SDK 接入](docs/sdk-v1-integration.md)。
 
-Embedded NATS is the default. It binds to loopback and uses port `0`, allowing the operating system to
-select an available port. External NATS credentials must be injected through deployment secrets and
-must never be committed.
-
-The planned file-independent bootstrap and single-binary design is documented in
-[`docs/single-binary-bootstrap-plan-2026-09-09.md`](docs/single-binary-bootstrap-plan-2026-09-09.md).
-
-## Development checks
+## 验证
 
 ```bash
-go test ./...
-go test -race ./...
-go vet ./...
-
-cd ui
-CI=true npm test -- --runInBand
-npm run build
+GOWORK=off go test ./...
+GOWORK=off go test -race ./...
+GOWORK=off go vet ./...
+cd ui && CI=true npm test -- --runInBand && npm run build
 ```
 
-Do not run integration rules against real PLCs, brokers, or databases unless the target environment is
-explicitly authorized.
+## 许可证
 
-## Documentation
-
-- [Architecture and system overview](docs/架构与系统总览.md)
-- [Runtime and scheduling](docs/运行时与调度.md)
-- [Plugin and SDK rules](docs/插件与SDK规范.md)
-- [Security deployment](docs/security-deployment.md)
-- [Open-source readiness audit](docs/open-source-readiness-audit-2026-09-09.md)
-
-## Security
-
-Report vulnerabilities using the repository security policy once the public GitHub repository is
-enabled. Never open a public issue containing credentials, private endpoints, device addresses, or
-production rule data.
-
-## License
-
-IoT Rule Engine is licensed under the [GNU Affero General Public License v3.0 only](LICENSE)
-(`AGPL-3.0-only`). If you modify the software and let users interact with that modified version over a
-network, review section 13's Corresponding Source obligations before deployment. The AGPL permits
-commercial use; it does not grant rights to project names, logos, or other trademarks.
+[GNU AGPL-3.0-only](LICENSE)。

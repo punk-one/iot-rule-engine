@@ -105,7 +105,10 @@ func (s *FifoScheduler) Submit(task *DispatchTask) error {
 			return nil
 		default:
 			select {
-			case <-s.queue:
+			case dropped := <-s.queue:
+				if dropped.Complete != nil {
+					dropped.Complete(ErrQueueFull)
+				}
 				atomic.AddInt64(&s.droppedCount, 1)
 				pkglog.Warn("Scheduler queue overflow: dropped oldest task (dropped=%d, queue_len=%d)",
 					atomic.LoadInt64(&s.droppedCount), len(s.queue))
@@ -135,12 +138,24 @@ func (s *FifoScheduler) loop() {
 	for {
 		select {
 		case task := <-s.queue:
-			if err := s.execute(task); err != nil {
+			err := s.execute(task)
+			if task.Complete != nil {
+				task.Complete(err)
+			}
+			if err != nil {
 				pkglog.Error("Scheduler failed to execute task (Rule: %s, To: %s): %v", task.RuleID, task.ToNode, err)
 			}
 		case <-s.stop:
-			// Optional: drain queue
-			return
+			for {
+				select {
+				case task := <-s.queue:
+					if task.Complete != nil {
+						task.Complete(errors.New("scheduler stopped"))
+					}
+				default:
+					return
+				}
+			}
 		}
 	}
 }

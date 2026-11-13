@@ -42,6 +42,7 @@ type registryArtifact struct {
 }
 
 type registryCatalogItem struct {
+	Compatible  bool             `json:"compatible"`
 	Plugin      registryArtifact `json:"plugin"`
 	DownloadURL string           `json:"download_url"`
 	BundleURL   string           `json:"bundle_url"`
@@ -65,6 +66,10 @@ func (m *Manager) ListRegistryPluginsHandler(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	for i := range catalog.Artifacts {
+		a := &catalog.Artifacts[i]
+		a.Compatible = a.Plugin.OS == runtime.GOOS && a.Plugin.Arch == runtime.GOARCH && a.Plugin.SDK == supportedRegistrySDK
+	}
 	c.JSON(http.StatusOK, catalog)
 }
 
@@ -83,6 +88,10 @@ func (m *Manager) InstallRegistryPluginHandler(c *gin.Context) {
 	}
 	if request.Arch == "" {
 		request.Arch = runtime.GOARCH
+	}
+	if request.OS != runtime.GOOS || request.Arch != runtime.GOARCH {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "requested platform does not match this engine"})
+		return
 	}
 	catalog, err := m.fetchRegistryCatalog(c.Request.Context())
 	if err != nil {
@@ -103,6 +112,10 @@ func (m *Manager) InstallRegistryPluginHandler(c *gin.Context) {
 	}
 	if selected.Plugin.SDK != supportedRegistrySDK {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "plugin targets an unsupported SDK"})
+		return
+	}
+	if _, err := safeUploadName(selected.Plugin.Filename); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid registry filename"})
 		return
 	}
 
@@ -143,6 +156,10 @@ func (m *Manager) InstallRegistryPluginHandler(c *gin.Context) {
 	}
 	if descriptor.ID != selected.Plugin.Plugin || descriptor.Version != strings.TrimPrefix(selected.Plugin.Version, "v") || string(descriptor.Type) != selected.Plugin.Type {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "plugin handshake identity does not match registry metadata"})
+		return
+	}
+	if err := m.cacheVerifiedRegistryArtifact(*selected, artifactPath, bundlePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	client, status, err := m.commitRegistryArtifact(artifactPath, selected.Plugin.Filename, descriptor)
@@ -281,6 +298,9 @@ func verifyFileSHA256(path, expected string) error {
 }
 
 func (m *Manager) commitRegistryArtifact(source, filename string, descriptor *sdk.PluginInfo) (*plugin.PluginClient, int, error) {
+	if filename != fmt.Sprintf("%s-%s.so", descriptor.ID, descriptor.Version) {
+		return nil, http.StatusUnprocessableEntity, errors.New("artifact filename does not match plugin identity")
+	}
 	targetDir := filepath.Join(m.pluginsDir, getPluginSubDir(descriptor.Type))
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return nil, http.StatusInternalServerError, errors.New("failed to create plugin directory")
@@ -314,9 +334,8 @@ func (m *Manager) commitRegistryArtifact(source, filename string, descriptor *sd
 	if existing.Info.Version == descriptor.Version {
 		return existing, http.StatusOK, nil
 	}
-	if _, err := os.Lstat(target); err == nil && filepath.Clean(target) != filepath.Clean(existing.Path) {
-		return nil, http.StatusConflict, errors.New("target plugin version already exists")
-	}
+	// Previous verified versions are intentionally retained for rollback. The
+	// caller revalidates identity and checksum before invoking this transaction.
 	staged := target + fmt.Sprintf(".staged-%d", time.Now().UnixNano())
 	if err := utils.CopyFile(source, staged); err != nil {
 		return nil, http.StatusInternalServerError, err

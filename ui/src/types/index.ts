@@ -181,6 +181,7 @@ export interface RegistryPluginArtifact {
 }
 
 export interface RegistryCatalogItem {
+	compatible?: boolean;
   plugin: RegistryPluginArtifact;
   download_url: string;
   bundle_url: string;

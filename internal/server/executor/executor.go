@@ -71,6 +71,7 @@ func RunWithRuntime(ctx context.Context, cfg *config.Config, runtimeMgr *runtime
 
 	// Set State Manager to Executor
 	executor.SetStateManager(stateMgr)
+	executor.SetDeliveryConfig(engine.DeliveryConfig{Mode:cfg.Executor.Delivery.Mode,EventTimeout:cfg.Executor.Delivery.EventTimeout,SerialDelivery:cfg.Executor.Delivery.SerialDelivery})
 	executor.SetPluginRuntimeDefaults(engine.PluginRuntimeDefaults{
 		BufferDBPath: resolveBufferDBPath(cfg),
 		NATS: bus.NATSOptions{
@@ -180,6 +181,7 @@ func RunWithRuntimeAndDBAndLoader(ctx context.Context, cfg *config.Config, runti
 
 	// Set State Manager to Executor
 	executor.SetStateManager(stateMgr)
+	executor.SetDeliveryConfig(engine.DeliveryConfig{Mode:cfg.Executor.Delivery.Mode,EventTimeout:cfg.Executor.Delivery.EventTimeout,SerialDelivery:cfg.Executor.Delivery.SerialDelivery})
 	executor.SetPluginRuntimeDefaults(engine.PluginRuntimeDefaults{
 		BufferDBPath: resolveBufferDBPath(cfg),
 		NATS: bus.NATSOptions{

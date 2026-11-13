@@ -211,6 +211,11 @@ func (d *Dispatcher) OnPluginEmit(ruleID, fromNodeID string, event *sdk.Event) e
 		d.notifyNodeEmit(ruleID, fromNodeID, baseEvent)
 	}
 
+	// Reliable delivery persists every edge before acknowledging the publisher.
+	// A downstream sink's business acknowledgement remains a separate boundary.
+	if d.deliveryMode == "reliable" {
+		return d.PublishEventToNodes(fromNodeID, toNodeIDs, baseEvent)
+	}
 	// 提交任务给 Scheduler
 	var firstErr error
 	for _, toNodeID := range toNodeIDs {
@@ -348,6 +353,15 @@ func (d *Dispatcher) OnPluginAck(ruleID, nodeID string, eventID string) {
 
 // OnPluginEmitBatch 处理插件批量发出的事件
 func (d *Dispatcher) OnPluginEmitBatch(ruleID, fromNodeID string, events []sdk.Event) error {
+	if d.deliveryMode == "reliable" {
+		var errs []error
+		for i := range events {
+			if err := d.OnPluginEmit(ruleID, fromNodeID, &events[i]); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		return errors.Join(errs...)
+	}
 	if len(events) == 0 {
 		return nil
 	}
@@ -520,12 +534,15 @@ func (d *Dispatcher) Start() error {
 	edgeQueueGroup := fmt.Sprintf("dispatcher-edge-%s", d.ruleID)
 
 	edgeSubscription, err := bus.SubscribeRuleEdgeManualAckManaged(string(d.ruleID), edgeQueueGroup, func(msg *nats.Msg) {
-		// 处理 Edge Topic 消息
-		if err := d.onMessage(msg.Subject, msg.Data); err != nil {
+		if err := d.submitMessage(msg.Subject, msg.Data, func(err error) {
+			if err != nil {
+				_ = msg.NakWithDelay(time.Second)
+			} else {
+				_ = msg.Ack()
+			}
+		}); err != nil {
 			pkglog.Error("Handler error for subject %s: %v", msg.Subject, err)
-			msg.Nak()
-		} else {
-			msg.Ack()
+			_ = msg.NakWithDelay(time.Second)
 		}
 	})
 
@@ -543,34 +560,41 @@ func (d *Dispatcher) Start() error {
 // Stop 停止 Dispatcher
 func (d *Dispatcher) Stop() {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
 	if !d.started {
+		d.mu.Unlock()
 		return
 	}
-	if d.edgeSubscription != nil {
-		if err := d.edgeSubscription.Close(); err != nil {
+	// Mark stopped before waiting for workers. A worker or plugin may be in
+	// PublishEventToNodes, which also takes mu; holding mu while joining it
+	// would deadlock rule undeployment.
+	d.started = false
+	subscription := d.edgeSubscription
+	d.edgeSubscription = nil
+	d.cancel()
+	d.mu.Unlock()
+	if subscription != nil {
+		if err := subscription.Close(); err != nil {
 			pkglog.Warn("Failed to close dispatcher edge subscription for rule %s: %v", d.ruleID, err)
 		}
-		d.edgeSubscription = nil
 	}
-
-	d.cancel()
 
 	// 停止 Scheduler
 	if err := d.scheduler.Stop(); err != nil {
 		pkglog.Error("Failed to stop scheduler: %v", err)
 	}
 
-	d.started = false
 	pkglog.Info("Dispatcher stopped for rule %s", d.ruleID)
 }
 
 // onMessage 处理 NATS 消息
 func (d *Dispatcher) onMessage(subject string, data []byte) error {
+	return d.submitMessage(subject, data, nil)
+}
+
+func (d *Dispatcher) submitMessage(subject string, data []byte, complete func(error)) error {
 	select {
 	case <-d.ctx.Done():
-		return nil
+		return fmt.Errorf("dispatcher stopped")
 	default:
 	}
 
@@ -585,14 +609,16 @@ func (d *Dispatcher) onMessage(subject string, data []byte) error {
 	}
 	event.RuleID = string(d.ruleID)
 	event.Source = "legacy_nats"
+	_, fromNodeID, _, _ := bus.ExtractEdgeInfo(subject)
 
 	// 提交给 Scheduler
 	task := &scheduler.DispatchTask{
 		RuleID:   string(d.ruleID),
-		FromNode: "legacy_nats",
+		FromNode: fromNodeID,
 		ToNode:   toNodeID,
 		Event:    event,
 		TraceCtx: context.Background(),
+		Complete: complete,
 	}
 
 	return d.scheduler.Submit(task)
