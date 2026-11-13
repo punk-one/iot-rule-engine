@@ -318,9 +318,10 @@ func (s *Server) prepareHTTPServer() *http.Server {
 			Handler:           s.router,
 			ReadHeaderTimeout: 5 * time.Second,
 			ReadTimeout:       30 * time.Second,
-			WriteTimeout:      30 * time.Second,
-			IdleTimeout:       60 * time.Second,
-			MaxHeaderBytes:    1 << 20,
+			// Signed plugin installation includes download, verification and handshake.
+			WriteTimeout:   180 * time.Second,
+			IdleTimeout:    60 * time.Second,
+			MaxHeaderBytes: 1 << 20,
 		}
 	}
 	return s.httpServer

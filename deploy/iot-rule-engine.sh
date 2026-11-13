@@ -36,7 +36,9 @@ case "$data" in /*) ;; *) echo 'data-dir must be absolute' >&2; exit 2;; esac
 for dir in "$prefix" "$data"; do
   [[ "$dir" != / && "$dir" != /home && "$dir" != /root && "$dir" != /usr && "$dir" != /var && "$dir" != *$'\n'* && "$dir" != *' '* ]] || { echo 'unsafe installation directory' >&2; exit 2; }
 done
-[[ "$listen" =~ ^[a-zA-Z0-9.\[\]:_-]+:[0-9]+$ ]] || { echo 'invalid listen address' >&2; exit 2; }
+listen_host="${listen%:*}"; listen_port="${listen##*:}"
+[[ "$listen_port" =~ ^[0-9]{1,5}$ ]] && ((10#$listen_port >= 1 && 10#$listen_port <= 65535)) || { echo 'invalid listen port' >&2; exit 2; }
+if [[ ! "$listen_host" =~ ^[a-zA-Z0-9._-]+$ && ! "$listen_host" =~ ^\[[0-9a-fA-F:]+\]$ ]]; then echo 'invalid listen address' >&2; exit 2; fi
 [[ "$factory" =~ ^[a-zA-Z0-9_-]*$ && "$gateway" =~ ^[a-zA-Z0-9_-]*$ ]] || { echo 'invalid identity' >&2; exit 2; }
 if ((service)); then
   [[ $EUID == 0 ]] || { echo 'Use sudo for system service installation.' >&2; exit 1; }

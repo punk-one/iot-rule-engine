@@ -38,6 +38,7 @@ jobs:
       - run: go test ./cmd ./internal/infra/config ./internal/webui ./internal/core/dispatcher/... && go vet ./...
         env:
           GOWORK: off
+      - run: bash deploy/test-installer.sh
       - run: ./deploy/release.sh
         env:
           VERSION: ${{ github.ref_name }}

@@ -298,7 +298,7 @@ export const pluginsAPI = {
   upgrade: async (name: string, file: File): Promise<PluginMeta> => {
     const formData = new FormData();
     formData.append('plugin', file);
-    const response = await api.post(`/plugins/${name}/upgrade`, formData);
+    const response = await api.post(`/plugins/${name}/upgrade`, formData, { timeout: 180000 });
     return response.data;
   },
 
@@ -312,11 +312,11 @@ export const pluginsAPI = {
     return response.data.versions || [];
   },
   rollback: async (name: string, version: string): Promise<PluginMeta> => {
-    const response = await api.post(`/plugins/${name}/rollback`, { version });
+    const response = await api.post(`/plugins/${name}/rollback`, { version }, { timeout: 180000 });
     return response.data;
   },
   installFromRegistry: async (name: string, version: string, os?: string, arch?: string): Promise<PluginMeta> => {
-    const response = await api.post(`/plugins/registry/${name}/install`, { version, os, arch });
+    const response = await api.post(`/plugins/registry/${name}/install`, { version, os, arch }, { timeout: 180000 });
     return response.data;
   },
 };
