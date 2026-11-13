@@ -35,7 +35,7 @@ jobs:
           cache-dependency-path: ui/package-lock.json
       - uses: sigstore/cosign-installer@v3
       - run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - run: go test ./cmd ./internal/infra/config ./internal/webui ./internal/core/plugin ./internal/core/dispatcher/... && go vet ./...
+      - run: go test ./cmd ./internal/infra/config ./internal/webui ./internal/core/plugin ./internal/core/connector ./internal/core/dispatcher/... && go vet ./...
         env:
           GOWORK: off
       - run: bash deploy/test-installer.sh

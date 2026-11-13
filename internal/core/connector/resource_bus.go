@@ -213,7 +213,19 @@ func (b *ResourceBus) RegisterResource(resource sdk.ConnectorResource) error {
 	b.mu.Lock()
 	b.resources[resource.ID] = resource
 	rt := b.runtimes[resource.ID]
+	var retired *resourceRuntime
+	if rt != nil && !resource.Enabled && rt.refCount == 0 {
+		retired = rt
+		delete(b.runtimes, resource.ID)
+		rt = nil
+	}
 	b.mu.Unlock()
+	if retired != nil {
+		retired.close()
+		if retired.provider != nil && retired.providerHandle != "" {
+			return retired.provider.DestroyResource(context.Background(), retired.providerHandle)
+		}
+	}
 
 	if rt == nil {
 		return nil
