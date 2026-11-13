@@ -8,11 +8,13 @@ import (
 
 type dummyConnector struct{}
 
+var fixtureVersion = "0.0.1"
+
 func (dummyConnector) Info() sdk.PluginInfo {
 	return sdk.PluginInfo{
 		ID:          "connect-dummy",
 		Name:        "Dummy Connector",
-		Version:     "0.0.1",
+		Version:     fixtureVersion,
 		Type:        sdk.PluginTypeConnector,
 		Description: "Test-only connector plugin",
 	}
@@ -55,7 +57,9 @@ func (dummyConnector) GrantCredits(providerHandle string, req sdk.StreamGrantCre
 	return nil
 }
 
-func (dummyConnector) CloseStream(providerHandle string, req sdk.StreamCloseRequest) error { return nil }
+func (dummyConnector) CloseStream(providerHandle string, req sdk.StreamCloseRequest) error {
+	return nil
+}
 
 func (dummyConnector) Probe(providerHandle string, req sdk.ConnectorRequest) (sdk.ResourceStatusEvent, error) {
 	return sdk.ResourceStatusEvent{

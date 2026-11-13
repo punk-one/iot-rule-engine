@@ -32,6 +32,28 @@ flowchart LR
 
 详见[多网关架构与可靠性边界](docs/multi-gateway.md)。西门子 S7 已有官方 Source/Connector/Sink；FANUC、三菱完整插件和 Fleet 集中管理仍为规划能力。
 
+上图每台网关内部都可同时运行以下规则。PLC 和 MQTT Connector 在各自 Engine 内复用，PLC 的读写节点绑定同一设备资源；不同设备仍分别创建资源。
+
+```mermaid
+flowchart LR
+  subgraph 任一边缘网关
+    A[PLC Source] --> B[转换 / 变化检测] --> C[持久缓冲] --> D[MQTT Sink]
+    E[MQTT Source] --> F[目标 / 有效期 / 幂等检查] --> G[PLC Sink]
+    P[共享 PLC Connector] -. 绑定 .-> A
+    P -. 绑定 .-> G
+    Q[共享 MQTT Connector] -. 绑定 .-> D
+    Q -. 绑定 .-> E
+  end
+  D --> M[外部 MQTT Broker]
+  M --> E
+  subgraph 单个服务器Engine
+    H[MQTT Source] --> I[数据处理] --> J[时序数据库 Sink]
+    K[MQTT Source] --> L[Redis 关系映射] --> N[业务数据库 Sink]
+  end
+  M --> H
+  M --> K
+```
+
 ## 核心能力
 
 - 多规则 DAG、不可变规则版本、部署实例和运行态指标。

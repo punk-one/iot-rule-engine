@@ -52,6 +52,18 @@ func TestLoaderSupportsConnectorPlugins(t *testing.T) {
 	if resolved.Path != binaryPath {
 		t.Fatalf("unexpected connector path: %s", resolved.Path)
 	}
+	release, err := resolved.RetainResource()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := loader.UnloadPlugin(info.ID); err == nil {
+		t.Fatal("connector with resource lease was unloaded")
+	}
+	if _, err := loader.ReloadPlugin(info.ID); err == nil {
+		t.Fatal("connector with resource lease was reloaded")
+	}
+	release()
+	release()
 
 	if err := loader.UnloadPlugin(info.ID); err != nil {
 		t.Fatalf("unload connector plugin: %v", err)

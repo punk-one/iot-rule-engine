@@ -346,7 +346,7 @@ export const PluginManagerPage: React.FC = () => {
 
       <PluginDetailModal plugin={detailPlugin} onClose={() => setDetailPlugin(null)} />
       <Modal title={`回滚 ${rollbackPlugin?.name || ''}`} open={rollbackPlugin !== null} onCancel={() => setRollbackPlugin(null)} onOk={() => void handleRollback()} okButtonProps={{ disabled: !rollbackVersion }} confirmLoading={pendingAction?.startsWith('rollback:')}>
-        <p>选择本机已验证并缓存的版本。使用中的插件需要先停止相关规则。</p>
+        <p>选择本机已验证并缓存的版本。先停止相关规则；Connector 插件还需停用相应资源，释放连接后再回滚。</p>
         <Select style={{ width: '100%' }} placeholder={cachedVersions.length ? '选择版本' : '没有可回滚的缓存版本'} value={rollbackVersion} onChange={setRollbackVersion} options={cachedVersions.map((item) => ({ value: item.plugin.version, label: `${item.plugin.version} · ${item.plugin.os}/${item.plugin.arch}` }))} />
       </Modal>
 

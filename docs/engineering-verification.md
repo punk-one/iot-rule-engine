@@ -40,6 +40,22 @@ Engine/UI 同源嵌入发行程序。Linux 安装脚本识别平台、验证固�
 测试结果以本次实际执行记录及 CI 状态为准。原生 ARM64 runner 的构建与测试，
 不能由 AMD64 交叉编译结果替代。FANUC、三菱完整协议插件和 Fleet 仍为规划。
 
+## 已发布验收记录
+
+- Engine v1.1.1：AMD64 与 ARM64 原生 runner 完成构建、签名和空目录启动；
+  [发行流程](https://github.com/punk-one/iot-rule-engine/actions/runs/43374184457)。
+- 插件集合 v1.0.3：仅选择 9 个插件，按各自版本和平台单独打包；
+  [原生双架构验收](https://github.com/punk-one/iot-rule-plugins/actions/runs/43372941296)。
+- 插件集合 v1.0.4：仅发布 connect-mqtt v1.0.2，修复资源删除与建连竞态；
+  [单插件双架构验收](https://github.com/punk-one/iot-rule-plugins/actions/runs/43374835702)。
+- 本地前端 20 个测试套件、59 项测试及生产构建通过；Engine 全量测试、竞态检查、
+  go vet、官方插件独立模块验收与 SDK v1 契约测试通过。
+- 多网关链路在 MQTT 资源关闭修复后再次通过：360 条唯一遥测完成断网、强制重启补传。
+- 安装器使用实际签名发行包通过安装与 UI/API 启动检查；测试下载经已核对的本地缓存，
+  不修改系统服务或防火墙。原生双架构 CI 验证实际可执行文件。
+- Hub 部署对 ELF 二进制响应启用 gzip，保持解压后的 SHA-256 和签名校验。
+  JavaScript 插件约 19 MB 原文件压缩传输约 7.1 MB，实测约 16 秒。
+
 ## 验证边界
 
 不把 QoS 1 的 Broker 接收确认解释成数据库提交，不承诺 exactly once。

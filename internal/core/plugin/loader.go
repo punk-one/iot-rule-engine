@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,8 @@ type PluginClient struct {
 	CanonicalPath       string
 	Protocol            plugin.ClientProtocol
 	ActiveInstances     int
+	ActiveResources     int
+	retired             bool
 	mutex               sync.RWMutex
 	owner               *PluginClient
 	releaseOnce         sync.Once
@@ -177,8 +180,9 @@ func (l *Loader) registerLoadedPlugin(pluginClient *PluginClient) *PluginClient 
 	if old, exists := l.plugins[pluginInfo.ID]; exists {
 		old.mutex.RLock()
 		activeInstances := old.ActiveInstances
+		activeResources := old.ActiveResources
 		old.mutex.RUnlock()
-		if activeInstances > 0 {
+		if activeInstances > 0 || activeResources > 0 {
 			l.mutex.Unlock()
 			pluginClient.Client.Kill()
 			pkglog.Warn("Plugin %s has %d active instances; keeping current process", pluginInfo.ID, activeInstances)
@@ -524,6 +528,11 @@ func (l *Loader) AcquirePluginInstance(pluginPath string) (*PluginClient, error)
 	}
 
 	owner.mutex.Lock()
+	if owner.retired {
+		owner.mutex.Unlock()
+		_ = rpcClient.Client.Close()
+		return nil, fmt.Errorf("plugin %s is retiring", owner.Info.ID)
+	}
 	owner.ActiveInstances++
 	owner.mutex.Unlock()
 	return &PluginClient{
@@ -709,12 +718,15 @@ func (l *Loader) UnloadPlugin(id string) error {
 	if !exists {
 		return fmt.Errorf("plugin %s not found", id)
 	}
-	pluginClient.mutex.RLock()
+	pluginClient.mutex.Lock()
 	activeInstances := pluginClient.ActiveInstances
-	pluginClient.mutex.RUnlock()
-	if activeInstances > 0 {
-		return fmt.Errorf("plugin %s still has %d active rule instances", id, activeInstances)
+	activeResources := pluginClient.ActiveResources
+	if activeInstances > 0 || activeResources > 0 {
+		pluginClient.mutex.Unlock()
+		return fmt.Errorf("plugin %s still has %d active rule instances and %d connector resources", id, activeInstances, activeResources)
 	}
+	pluginClient.retired = true
+	pluginClient.mutex.Unlock()
 
 	// 关闭插件客户端
 	if pluginClient.ConnectorRPCClient != nil {
@@ -780,13 +792,16 @@ func (l *Loader) ReloadPlugin(id string) (*PluginClient, error) {
 		l.mutex.Unlock()
 		return nil, fmt.Errorf("plugin %s not found", id)
 	}
-	pluginClient.mutex.RLock()
+	pluginClient.mutex.Lock()
 	activeInstances := pluginClient.ActiveInstances
-	pluginClient.mutex.RUnlock()
-	if activeInstances > 0 {
+	activeResources := pluginClient.ActiveResources
+	if activeInstances > 0 || activeResources > 0 {
+		pluginClient.mutex.Unlock()
 		l.mutex.Unlock()
-		return nil, fmt.Errorf("plugin %s has %d active rule instances and cannot be reloaded", id, activeInstances)
+		return nil, fmt.Errorf("plugin %s has %d active rule instances and %d connector resources and cannot be reloaded", id, activeInstances, activeResources)
 	}
+	pluginClient.retired = true
+	pluginClient.mutex.Unlock()
 
 	// 增加重启计数
 	pluginClient.mutex.Lock()
@@ -983,6 +998,7 @@ func (l *Loader) ScanPlugins() error {
 	loadedCount := 0
 	failedCount := 0
 	processedFiles := make(map[string]bool) // 用于跟踪已处理的文件（避免重复处理符号链接）
+	var candidates []string
 
 	err := filepath.Walk(l.pluginsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -1002,66 +1018,88 @@ func (l *Loader) ScanPlugins() error {
 		if ext != ".so" && ext != ".exe" && ext != ".dll" {
 			return nil
 		}
-
-		// 处理符号链接：解析真实路径，避免重复加载
-		realPath := path
-		if info.Mode()&os.ModeSymlink != 0 {
-			resolved, err := os.Readlink(path)
-			if err != nil {
-				pkglog.Warn("Failed to resolve symlink %s: %v", path, err)
-				return nil
-			}
-			// 如果是相对路径，转换为绝对路径
-			if !filepath.IsAbs(resolved) {
-				resolved = filepath.Join(filepath.Dir(path), resolved)
-			}
-			realPath = resolved
-
-			// 如果真实文件已经处理过，跳过符号链接
-			if processedFiles[realPath] {
-				return nil
-			}
-		}
-
-		// 检查文件是否已处理
-		if processedFiles[realPath] {
-			return nil
-		}
-		processedFiles[realPath] = true
-
-		// 检查文件是否存在且可执行
-		realInfo, err := os.Stat(realPath)
-		if err != nil {
-			pkglog.Warn("Failed to stat plugin file %s: %v", realPath, err)
-			return nil
-		}
-
-		// Check executable (跳过符号链接的可执行检查，直接检查真实文件)
-		if realInfo.Mode()&0111 == 0 && os.Getenv("GOOS") != "windows" {
-			// 尝试添加执行权限（可选）
-			pkglog.Debug("Plugin file %s is not executable, attempting to chmod", realPath)
-		}
-
-		pkglog.Debug("Loading plugin: %s", realPath)
-		load := l.LoadPlugin
-		if filepath.Base(filepath.Dir(realPath)) == "connectors" {
-			load = l.LoadConnectorPlugin
-		}
-		if _, err := load(realPath); err != nil {
-			failedCount++
-			pkglog.Error("Failed to load plugin %s: %v", realPath, err)
-			return nil // 继续扫描其他插件
-		}
-
-		loadedCount++
+		candidates = append(candidates, path)
 		return nil
 	})
-
 	if err != nil {
 		return fmt.Errorf("failed to scan plugins directory: %w", err)
 	}
-
+	// A rollback's explicit -latest selection must win before the canonical
+	// target is marked processed. Preserve the alias when registering it so
+	// retained higher versions cannot silently replace it after a restart.
+	sort.SliceStable(candidates, func(i, j int) bool {
+		left, right := isLatestArtifactPath(candidates[i]), isLatestArtifactPath(candidates[j])
+		if left != right {
+			return left
+		}
+		return candidates[i] < candidates[j]
+	})
+	for _, path := range candidates {
+		if err := l.scanPluginCandidate(path, processedFiles, &loadedCount, &failedCount); err != nil {
+			return err
+		}
+	}
 	pkglog.Info("Scanned plugins directory: %d loaded, %d failed", loadedCount, failedCount)
+	return nil
+}
+
+func (l *Loader) scanPluginCandidate(path string, processedFiles map[string]bool, loadedCount, failedCount *int) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+
+	// 处理符号链接：解析真实路径，避免重复加载
+	realPath := path
+	if info.Mode()&os.ModeSymlink != 0 {
+		resolved, err := os.Readlink(path)
+		if err != nil {
+			pkglog.Warn("Failed to resolve symlink %s: %v", path, err)
+			return nil
+		}
+		// 如果是相对路径，转换为绝对路径
+		if !filepath.IsAbs(resolved) {
+			resolved = filepath.Join(filepath.Dir(path), resolved)
+		}
+		realPath = resolved
+
+		// 如果真实文件已经处理过，跳过符号链接
+		if processedFiles[realPath] {
+			return nil
+		}
+	}
+
+	// 检查文件是否已处理
+	if processedFiles[realPath] {
+		return nil
+	}
+	processedFiles[realPath] = true
+
+	// 检查文件是否存在且可执行
+	realInfo, err := os.Stat(realPath)
+	if err != nil {
+		pkglog.Warn("Failed to stat plugin file %s: %v", realPath, err)
+		return nil
+	}
+
+	// Check executable (跳过符号链接的可执行检查，直接检查真实文件)
+	if realInfo.Mode()&0111 == 0 && os.Getenv("GOOS") != "windows" {
+		// 尝试添加执行权限（可选）
+		pkglog.Debug("Plugin file %s is not executable, attempting to chmod", realPath)
+	}
+
+	pkglog.Debug("Loading plugin: %s", realPath)
+	load := l.LoadPlugin
+	if filepath.Base(filepath.Dir(realPath)) == "connectors" {
+		load = l.LoadConnectorPlugin
+	}
+	if _, err := load(path); err != nil {
+		*failedCount++
+		pkglog.Error("Failed to load plugin %s: %v", realPath, err)
+		return nil // 继续扫描其他插件
+	}
+
+	*loadedCount++
 	return nil
 }
 

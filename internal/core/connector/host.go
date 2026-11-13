@@ -55,6 +55,13 @@ func (h *Host) ResolveForResource(resource sdk.ConnectorResource) (Provider, err
 
 func (h *Host) ensurePreferredProvidersLocked(pluginID string, policy sdk.ProviderPolicy) error {
 	_ = policy // v1 single-process contract: provider scaling is resource-level, not process-level.
+	pool := h.providers[pluginID][:0]
+	for _, provider := range h.providers[pluginID] {
+		if provider != nil && provider.client != nil && provider.client.Client != nil && !provider.client.Client.Exited() {
+			pool = append(pool, provider)
+		}
+	}
+	h.providers[pluginID] = pool
 	if len(h.providers[pluginID]) == 0 {
 		provider, err := h.spawnProviderLocked(pluginID)
 		if err != nil {
@@ -111,6 +118,7 @@ func (h *Host) spawnProviderLocked(pluginID string) (*pluginBackedProvider, erro
 		pluginID:         pluginID,
 		instanceID:       h.nextProviderInstanceIDLocked(pluginID),
 		handleToResource: make(map[string]string),
+		resourceReleases: make(map[string]func()),
 		resourcePolicies: make(map[string]sdk.ProviderPolicy),
 	}, nil
 }
@@ -127,7 +135,7 @@ func (h *Host) acquirePluginClientLocked(pluginID string) (*coreplugin.PluginCli
 	if err != nil {
 		return nil, err
 	}
-	return h.loader.SpawnConnectorPlugin(path)
+	return h.loader.LoadConnectorPlugin(path)
 }
 
 func (h *Host) nextProviderInstanceIDLocked(pluginID string) string {
@@ -147,6 +155,12 @@ func (h *Host) Close() {
 				_ = provider.client.ConnectorRPCClient.Stop()
 			}
 			provider.client.Client.Kill()
+			provider.mu.Lock()
+			for handle, release := range provider.resourceReleases {
+				release()
+				delete(provider.resourceReleases, handle)
+			}
+			provider.mu.Unlock()
 		}
 		delete(h.providers, pluginID)
 	}
@@ -162,12 +176,19 @@ type pluginBackedProvider struct {
 	cond              *sync.Cond
 	inflight          int
 	handleToResource  map[string]string
+	resourceReleases  map[string]func()
 	resourcePolicies  map[string]sdk.ProviderPolicy
 }
 
 func (p *pluginBackedProvider) CreateResource(ctx context.Context, resource sdk.ConnectorResource) (string, error) {
+	release, err := p.client.RetainResource()
+	if err != nil {
+		p.releaseAssignment("")
+		return "", err
+	}
 	handle, err := p.client.ConnectorRPCClient.CreateResource(resource)
 	if err != nil {
+		release()
 		p.releaseAssignment("")
 		return "", err
 	}
@@ -176,6 +197,13 @@ func (p *pluginBackedProvider) CreateResource(ctx context.Context, resource sdk.
 		p.cond = sync.NewCond(&p.mu)
 	}
 	p.handleToResource[handle] = resource.ID
+	if p.resourceReleases == nil {
+		p.resourceReleases = make(map[string]func())
+	}
+	if previous := p.resourceReleases[handle]; previous != nil {
+		previous()
+	}
+	p.resourceReleases[handle] = release
 	p.resourcePolicies[resource.ID] = resource.ProviderPolicy
 	p.mu.Unlock()
 	return handle, nil
@@ -281,6 +309,10 @@ func (p *pluginBackedProvider) releaseAssignment(resourceID string) {
 		delete(p.resourcePolicies, resourceID)
 		for handle, assignedResourceID := range p.handleToResource {
 			if assignedResourceID == resourceID {
+				if release := p.resourceReleases[handle]; release != nil {
+					release()
+					delete(p.resourceReleases, handle)
+				}
 				delete(p.handleToResource, handle)
 			}
 		}
