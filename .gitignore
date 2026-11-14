@@ -38,3 +38,6 @@ bin
 /dist/
 /plugins/
 tools
+
+# Connector encryption keys are deployment secrets.
+connector.key

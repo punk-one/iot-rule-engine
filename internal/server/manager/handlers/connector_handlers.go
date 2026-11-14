@@ -183,12 +183,14 @@ func (m *Manager) upsertConnectorResource(c *gin.Context, creating bool) {
 		resource.ID = pathID
 	}
 
+	var previous *sdk.ConnectorResource
 	if !creating {
 		stored, err := m.db.GetConnectorResource(resource.ID)
 		if err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
+		previous = stored
 		resource.Connection = mergeConnectorSecrets(resource.Connection, stored.Connection)
 	}
 
@@ -197,16 +199,23 @@ func (m *Manager) upsertConnectorResource(c *gin.Context, creating bool) {
 		return
 	}
 
-	if err := m.db.SaveConnectorResource(&resource); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	// Apply first so rejected changes never become the persisted desired state.
+	if err := m.syncConnectorResourceToExecutor(&resource); err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "connector configuration was not applied", "details": err.Error()})
 		return
 	}
-
-	if err := m.syncConnectorResourceToExecutor(&resource); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{
-			"error":   "connector resource saved but failed to sync to executor",
-			"details": err.Error(),
-		})
+	if err := m.db.SaveConnectorResource(&resource); err != nil {
+		var rollbackErr error
+		if previous != nil {
+			rollbackErr = m.syncConnectorResourceToExecutor(previous)
+		} else {
+			rollbackErr = m.deleteConnectorResourceFromExecutor(resource.ID)
+		}
+		if rollbackErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "connector persistence and rollback failed; executor reconciliation required"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "connector persistence failed; runtime configuration rolled back"})
+		}
 		return
 	}
 

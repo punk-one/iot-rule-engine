@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +58,7 @@ type BindingOptions struct {
 }
 
 type ResourceBus struct {
+	lifecycleMu          sync.Mutex
 	mu                   sync.RWMutex
 	providers            map[string]Provider
 	resources            map[string]sdk.ConnectorResource
@@ -203,6 +205,8 @@ func (b *ResourceBus) SetResourceProviderResolver(resolver func(resource sdk.Con
 }
 
 func (b *ResourceBus) RegisterResource(resource sdk.ConnectorResource) error {
+	b.lifecycleMu.Lock()
+	defer b.lifecycleMu.Unlock()
 	if resource.ID == "" {
 		return fmt.Errorf("connector resource id is required")
 	}
@@ -211,10 +215,16 @@ func (b *ResourceBus) RegisterResource(resource sdk.ConnectorResource) error {
 	}
 
 	b.mu.Lock()
-	b.resources[resource.ID] = resource
+	old := b.resources[resource.ID]
 	rt := b.runtimes[resource.ID]
+	changed := old.PluginID != resource.PluginID || !reflect.DeepEqual(old.Connection, resource.Connection) || old.SessionPolicy != resource.SessionPolicy || old.WarmupPolicy != resource.WarmupPolicy || !reflect.DeepEqual(old.ProviderPolicy, resource.ProviderPolicy) || old.Enabled != resource.Enabled
+	if rt != nil && changed && rt.refCount > 0 {
+		b.mu.Unlock()
+		return fmt.Errorf("connector resource %s is in use: stop its rules before changing connection settings", resource.ID)
+	}
+	b.resources[resource.ID] = resource
 	var retired *resourceRuntime
-	if rt != nil && !resource.Enabled && rt.refCount == 0 {
+	if rt != nil && (changed || !resource.Enabled) && rt.refCount == 0 {
 		retired = rt
 		delete(b.runtimes, resource.ID)
 		rt = nil
@@ -243,6 +253,8 @@ func (b *ResourceBus) RegisterResource(resource sdk.ConnectorResource) error {
 }
 
 func (b *ResourceBus) UnregisterResource(ctx context.Context, resourceID string) error {
+	b.lifecycleMu.Lock()
+	defer b.lifecycleMu.Unlock()
 	b.mu.Lock()
 	rt := b.runtimes[resourceID]
 	if rt != nil && rt.refCount > 0 {
@@ -264,6 +276,8 @@ func (b *ResourceBus) UnregisterResource(ctx context.Context, resourceID string)
 }
 
 func (b *ResourceBus) Warmup(ctx context.Context, resourceID string) error {
+	b.lifecycleMu.Lock()
+	defer b.lifecycleMu.Unlock()
 	_, err := b.ensureRuntime(ctx, resourceID)
 	return err
 }
@@ -273,6 +287,8 @@ func (b *ResourceBus) Bind(ctx context.Context, resourceID string) (string, erro
 }
 
 func (b *ResourceBus) BindWithOptions(ctx context.Context, resourceID string, opts BindingOptions) (string, error) {
+	b.lifecycleMu.Lock()
+	defer b.lifecycleMu.Unlock()
 	rt, err := b.ensureRuntime(ctx, resourceID)
 	if err != nil {
 		return "", err
@@ -301,6 +317,8 @@ func (b *ResourceBus) BindWithOptions(ctx context.Context, resourceID string, op
 }
 
 func (b *ResourceBus) Release(ctx context.Context, token string) error {
+	b.lifecycleMu.Lock()
+	defer b.lifecycleMu.Unlock()
 	b.mu.Lock()
 	binding, ok := b.bindings[token]
 	if !ok {

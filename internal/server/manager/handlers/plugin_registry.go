@@ -256,7 +256,7 @@ func (m *Manager) registryURL(reference string) (*url.URL, error) {
 
 func (m *Manager) registryHTTPClient() *http.Client {
 	return &http.Client{Timeout: 45 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) > 0 && req.URL.Host != via[0].URL.Host {
+		if len(via) > 0 && (req.URL.Scheme != via[0].URL.Scheme || !strings.EqualFold(req.URL.Host, via[0].URL.Host)) {
 			return errors.New("cross-origin registry redirect rejected")
 		}
 		if len(via) >= 3 {

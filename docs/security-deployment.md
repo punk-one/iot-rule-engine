@@ -11,7 +11,7 @@
 
 ## Secret 注入
 
-不要把密码、Token、NATS creds 或 TLS 私钥写入仓库和配置数据库。使用部署平台 secret 注入下列环境变量或受限文件路径：
+不要把密码、Token、NATS creds 或 TLS 私钥写入仓库。系统启动配置应使用部署平台 secret 注入环境变量或受限文件路径。SQLite Connector 记录使用下文说明的认证加密；其他配置不自动获得同样保护。部署时必须限制数据库、密钥、WAL 和备份的访问，并使用最小权限的连接账号。下列启动配置支持环境变量：
 
 ```text
 IOT_RULE_ADMIN_PASSWORD
@@ -64,3 +64,26 @@ release manifest 必须由发布流水线在引擎外完成签名验证，并以
 - 固定 SDK `v1.0.0` 和插件 artifact digest。
 - 执行 `go test ./...`、`go test -race ./...`、`go vet ./...`。
 - 在目标环境验证优雅停止、NATS 断线恢复、插件崩溃恢复和升级回滚。
+
+
+## Connector SQLite encryption (2026-11-14)
+
+New Connector records are authenticated and encrypted with AES-256-GCM. The default key is
+`connector.key` beside `rules.db`, created with mode 0600. Set `IOT_RULE_CONNECTOR_KEY_FILE`
+to a persistent, separately protected 32-byte binary key file. Back up this key separately;
+losing it makes the encrypted Connector records unrecoverable. Do not put the key in Git,
+diagnostic bundles or a database-only backup. The default protects a copied database, not
+an attacker who can read both the database and the key as the service user.
+
+Startup migrates existing active Connector rows transactionally. Existing encrypted rows
+with a missing, wrong or insecurely readable key cause startup to fail. This format cannot
+be read by older engine binaries: restore a pre-upgrade database backup for rollback.
+Migration does not erase plaintext from old SQLite pages, WAL files or historical backups.
+After a verified backup and a maintenance shutdown of all database users, use an approved
+SQLite checkpoint/compaction procedure and retire old backup copies according to policy.
+Rotate previously exposed credentials. This change covers SQLite Connector records;
+other stored configuration and the PostgreSQL adapter need separate secret review.
+
+Changing connection/session/provider settings of a resource used by rules is rejected.
+Stop the referencing rules, save the resource, and then restart the rules. An idle resource
+retires its old provider so its next operation uses the new configuration.

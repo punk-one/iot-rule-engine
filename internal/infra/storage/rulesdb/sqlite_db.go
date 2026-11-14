@@ -2,6 +2,7 @@ package rulesdb
 
 import (
 	"context"
+	"crypto/cipher"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 
 // SQLiteDB SQLite 数据库实现
 type SQLiteDB struct {
+	connectorCipher          cipher.AEAD
 	db                       *sql.DB
 	path                     string
 	watchers                 map[string]*sqliteWatcherState
@@ -92,14 +94,19 @@ func OpenSQLite(cfg Config) (*SQLiteDB, error) {
 
 	pkglog.Info("SQLite database initialized at %s", dbPath)
 
-	return &SQLiteDB{
+	store := &SQLiteDB{
 		db:                   db,
 		path:                 dbPath,
 		watchers:             make(map[string]*sqliteWatcherState),
 		connectorWatchers:    make(map[string]*sqliteWatcherState),
 		ruleSubscribers:      make(map[int]sqliteRuleSubscriber),
 		connectorSubscribers: make(map[int]sqliteConnectorSubscriber),
-	}, nil
+	}
+	if err := store.initConnectorCipher(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return store, nil
 }
 
 // initSQLiteTables 初始化表结构
@@ -359,6 +366,10 @@ func (s *SQLiteDB) SaveConnectorResource(resource *sdk.ConnectorResource) error 
 		return fmt.Errorf("failed to marshal connector resource: %w", err)
 	}
 
+	encrypted, err := s.encodeConnector(data)
+	if err != nil {
+		return err
+	}
 	enabled := 0
 	if resource.Enabled {
 		enabled = 1
@@ -373,7 +384,7 @@ func (s *SQLiteDB) SaveConnectorResource(resource *sdk.ConnectorResource) error 
 			enabled = excluded.enabled,
 			resource = excluded.resource,
 			updated_at = CURRENT_TIMESTAMP
-	`, resource.ID, resource.PluginID, resource.Name, enabled, string(data))
+	`, resource.ID, resource.PluginID, resource.Name, enabled, encrypted)
 	if err != nil {
 		return fmt.Errorf("failed to save connector resource: %w", err)
 	}
@@ -393,7 +404,11 @@ func (s *SQLiteDB) GetConnectorResource(resourceID string) (*sdk.ConnectorResour
 	}
 
 	var resource sdk.ConnectorResource
-	if err := json.Unmarshal([]byte(raw), &resource); err != nil {
+	plain, err := s.decodeConnector(raw)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(plain, &resource); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal connector resource: %w", err)
 	}
 	return &resource, nil
@@ -414,7 +429,11 @@ func (s *SQLiteDB) ListConnectorResources() ([]*sdk.ConnectorResource, error) {
 			return nil, fmt.Errorf("failed to scan connector resource: %w", err)
 		}
 		var resource sdk.ConnectorResource
-		if err := json.Unmarshal([]byte(raw), &resource); err != nil {
+		plain, err := s.decodeConnector(raw)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(plain, &resource); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal connector resource: %w", err)
 		}
 		resources = append(resources, &resource)
@@ -604,7 +623,12 @@ func (s *SQLiteDB) pollSQLiteConnectorChanges() {
 		if err := rows.Scan(&id, &raw); err != nil {
 			continue
 		}
-		currentResources[id] = []byte(raw)
+		plain, err := s.decodeConnector(raw)
+		if err != nil {
+			pkglog.Error("Failed to decrypt connector resource %s", id)
+			return
+		}
+		currentResources[id] = plain
 	}
 
 	s.mu.Lock()
